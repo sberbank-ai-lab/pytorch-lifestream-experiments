@@ -8,7 +8,7 @@ from copy import deepcopy
 
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, WeightedRandomSampler
 from torch.utils.data.dataloader import DataLoader
 
 from dltranz.data_load import TrxDataset, ConvertingTrxDataset, DropoutTrxDataset, padded_collate, \
@@ -72,12 +72,65 @@ class ClippingDataset(Dataset):
         return item
 
 
+class FlipDataset(Dataset):
+    def __init__(self, delegate, p=0.25):
+        super().__init__()
+
+        self.delegate = delegate
+        self.p = p
+
+    def __len__(self):
+        return len(self.delegate)
+
+    def __getitem__(self, item):
+        item = self.delegate[item]
+
+        if random.random() > self.p:
+            return item
+
+        item = deepcopy(item)
+        item['feature_arrays'] = {k: deepcopy(v[::-1]) for k, v in item['feature_arrays'].items()}
+        item['event_time'] = deepcopy(item['event_time'][::-1])
+        return item
+
+
+class ShiftDataSet(Dataset):
+    def __init__(self, delegate, p=0.25):
+        super().__init__()
+
+        self.delegate = delegate
+        self.p = p
+
+    def __len__(self):
+        return len(self.delegate)
+
+    def __getitem__(self, item):
+        item = self.delegate[item]
+
+        if random.random() > self.p:
+            return item
+
+        seq_len = len(item['event_time'])
+        if seq_len <= 5:
+            return item
+
+        item = deepcopy(item)
+        split_pos = random.randint(int(seq_len * 0.1), int(seq_len * 0.9))
+
+        item['feature_arrays'] = {k: np.concatenate([v[split_pos:], v[:split_pos]])
+                                  for k, v in item['feature_arrays'].items()}
+        item['event_time'] = np.concatenate([item['event_time'][split_pos:], item['event_time'][:split_pos]])
+        return item
+
+
 def create_ds(train_data, valid_data, conf):
     if 'clip_seq' in conf['params.train']:
         train_data = ClippingDataset(train_data,
                                      min_len=conf['params.train.clip_seq.min_len'],
                                      max_len=conf['params.train.clip_seq.max_len'],
                                      )
+    train_data = FlipDataset(train_data, p=0.0)
+    train_data = ShiftDataSet(train_data, p=0.0)
 
     train_ds = ConvertingTrxDataset(TrxDataset(train_data, y_dtype=np.int64))
     valid_ds = ConvertingTrxDataset(TrxDataset(valid_data, y_dtype=np.int64))
@@ -85,14 +138,24 @@ def create_ds(train_data, valid_data, conf):
     return train_ds, valid_ds
 
 
-def run_experiment(train_ds, valid_ds, params, model_f):
+def get_sampler(data):
+    norm_lens = [max(min(len(x['event_time']), 2000), 250) for x in data]
+    max_mcc = [np.percentile(x['feature_arrays']['mcc_code'], 90) for x in data]
+
+    weights = [(x / 2000) ** 0.5 for x in norm_lens]
+    num_samples = int(sum([(x // 250) ** 0.5 for x in norm_lens]))
+    return WeightedRandomSampler(weights=weights, num_samples=num_samples, replacement=True)
+
+
+def run_experiment(train_ds, valid_ds, params, model_f, train_sampler=None):
     model = model_f(params)
 
     train_ds = DropoutTrxDataset(train_ds, params['train.trx_dropout'], params['train.max_seq_len'])
     train_loader = DataLoader(
         train_ds,
         batch_size=params['train.batch_size'],
-        shuffle=True,
+        shuffle=True if train_sampler is None else False,
+        sampler=train_sampler,
         num_workers=params['train.num_workers'],
         collate_fn=padded_collate)
 
@@ -135,11 +198,12 @@ def main(_):
     target_values = [rec['target'] for rec in all_data]
     for i, (i_train, i_valid) in enumerate(skf.split(all_data, target_values)):
         logger.info(f'Train fold: {i}')
-        i_train_data = [rec for i, rec in enumerate(all_data) if i in i_train]
+        i_train_data = [rec for i, rec in enumerate(all_data) if i in i_train and random.random() <= 1.0]
         i_valid_data = [rec for i, rec in enumerate(all_data) if i in i_valid]
 
         train_ds, valid_ds = create_ds(i_train_data, i_valid_data, conf)
-        model, result = run_experiment(train_ds, valid_ds, conf['params'], model_f)
+        model, result = run_experiment(train_ds, valid_ds, conf['params'], model_f,
+                                       train_sampler=get_sampler(i_train_data))
 
         # inference
         columns = conf['output.columns']
