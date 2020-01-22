@@ -29,37 +29,37 @@ python -m scenario_age_pred compare_approaches --pos 4 5 6 7 8 9 10 11 12 --ml_e
     "embeddings_v_len60.pickle"    \
     "embeddings_v_len250.pickle"
 
-#                     (rocauc_score, mean)  (rocauc_score, std)       (rocauc_score, <lambda_0>) metric_learning_embedding_name
+#                     (accuracy, mean)  (accuracy, std)           (accuracy, <lambda_0>) metric_learning_embedding_name
 #     pos model_type
-#     5   linear                    0.8624               0.0091  [0.850 0.856 0.867 0.870 0.870]       embeddings_v_base.pickle
-#         xgb                       0.8578               0.0108  [0.843 0.854 0.857 0.865 0.871]       embeddings_v_base.pickle
-#     6   linear                    0.8608               0.0083  [0.848 0.859 0.861 0.866 0.870]      embeddings_v_hs512.pickle
-#         xgb                       0.8581               0.0075  [0.850 0.851 0.859 0.863 0.868]      embeddings_v_hs512.pickle
-#     7   linear                    0.8631               0.0097  [0.850 0.859 0.862 0.871 0.873]   embeddings_v_epoch250.pickle
-#         xgb                       0.8575               0.0101  [0.841 0.857 0.858 0.863 0.868]   embeddings_v_epoch250.pickle
-#     8   linear                    0.8573               0.0106  [0.845 0.851 0.856 0.862 0.872]       embeddings_v_bs32.pickle
-#         xgb                       0.8521               0.0096  [0.838 0.849 0.852 0.857 0.864]       embeddings_v_bs32.pickle
-#     9   linear                    0.8606               0.0091  [0.848 0.855 0.863 0.866 0.871]      embeddings_v_bs128.pickle
-#         xgb                       0.8531               0.0065  [0.844 0.849 0.853 0.859 0.860]      embeddings_v_bs128.pickle
-#     10  linear                    0.8625               0.0074  [0.855 0.855 0.865 0.865 0.872]      embeddings_v_bs256.pickle
-#         xgb                       0.8570               0.0095  [0.845 0.849 0.862 0.864 0.865]      embeddings_v_bs256.pickle
-#     11  linear                    0.8550               0.0075  [0.842 0.855 0.857 0.860 0.861]     embeddings_v_len150.pickle
-#         xgb                       0.8464               0.0064  [0.836 0.845 0.850 0.851 0.851]     embeddings_v_len150.pickle
-#     12  linear                    0.8565               0.0084  [0.843 0.854 0.860 0.861 0.865]      embeddings_v_len60.pickle
-#         xgb                       0.8539               0.0089  [0.840 0.854 0.854 0.858 0.864]      embeddings_v_len60.pickle
-#     13  linear                    0.8426               0.0097  [0.828 0.837 0.845 0.850 0.852]     embeddings_v_len250.pickle
-#         xgb                       0.8423               0.0134  [0.826 0.832 0.845 0.850 0.859]     embeddings_v_len250.pickle
+#     4   linear                0.6010           0.0079  [0.591 0.598 0.601 0.602 0.613]       embeddings_v_base.pickle
+#         xgb                   0.6107           0.0070  [0.606 0.608 0.609 0.609 0.623]       embeddings_v_base.pickle
+#     5   linear                0.6246           0.0035  [0.620 0.622 0.624 0.628 0.628]      embeddings_v_hs512.pickle
+#         xgb                   0.6265           0.0042  [0.622 0.624 0.625 0.629 0.633]      embeddings_v_hs512.pickle
+#     6   linear                0.5200           0.0059  [0.514 0.517 0.518 0.520 0.530]   embeddings_v_epoch250.pickle
+#         xgb                   0.5530           0.0073  [0.543 0.548 0.555 0.558 0.561]   embeddings_v_epoch250.pickle
+#     7   linear                0.5003           0.0065  [0.492 0.497 0.500 0.503 0.509]       embeddings_v_bs32.pickle
+#         xgb                   0.5807           0.0044  [0.575 0.577 0.582 0.584 0.585]       embeddings_v_bs32.pickle
+#     8   linear                0.6224           0.0055  [0.618 0.619 0.621 0.624 0.631]      embeddings_v_bs128.pickle
+#         xgb                   0.6224           0.0064  [0.614 0.620 0.622 0.627 0.630]      embeddings_v_bs128.pickle
+#     9   linear                0.6242           0.0025  [0.620 0.623 0.625 0.626 0.627]      embeddings_v_bs256.pickle
+#         xgb                   0.6229           0.0028  [0.621 0.621 0.623 0.623 0.628]      embeddings_v_bs256.pickle
+#     10  linear                0.6192           0.0033  [0.617 0.617 0.618 0.619 0.625]     embeddings_v_len150.pickle
+#         xgb                   0.6209           0.0037  [0.616 0.620 0.621 0.624 0.625]     embeddings_v_len150.pickle
+#     11  linear                0.6195           0.0072  [0.609 0.616 0.622 0.623 0.628]      embeddings_v_len60.pickle
+#         xgb                   0.6239           0.0067  [0.614 0.622 0.625 0.626 0.632]      embeddings_v_len60.pickle
+#     12  linear                0.6188           0.0070  [0.609 0.617 0.620 0.622 0.627]     embeddings_v_len250.pickle
+#         xgb                   0.6199           0.0059  [0.612 0.618 0.619 0.624 0.627]     embeddings_v_len250.pickle
 
 
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_base.p"     output.path="../data/age-pred/finetuning_scores_v_base"       --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_hs512.p"    output.path="../data/age-pred/finetuning_scores_v_hs512"    params.rnn.hidden_size=512 --conf conf/gage_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_epoch250.p" output.path="../data/age-pred/finetuning_scores_v_epoch250"   --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs32.p"     output.path="../data/age-pred/finetuning_scores_v_bs32"       --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs128.p"    output.path="../data/age-pred/finetuning_scores_v_bs128"      --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs256.p"    output.path="../data/age-pred/finetuning_scores_v_bs256"      --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len150.p"   output.path="../data/age-pred/finetuning_scores_v_len150"     --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len60.p"    output.path="../data/age-pred/finetuning_scores_v_len60"      --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len250.p"   output.path="../data/age-pred/finetuning_scores_v_len250"     --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_base.p"     output.path="../data/age-pred/finetuning_scores_v_base"       --conf conf/age_pred_target_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_hs512.p"    output.path="../data/age-pred/finetuning_scores_v_hs512"    params.rnn.hidden_size=512 --conf conf/age_pred_target_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_epoch250.p" output.path="../data/age-pred/finetuning_scores_v_epoch250"   --conf conf/age_pred_target_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs32.p"     output.path="../data/age-pred/finetuning_scores_v_bs32"       --conf conf/age_pred_target_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs128.p"    output.path="../data/age-pred/finetuning_scores_v_bs128"      --conf conf/age_pred_target_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs256.p"    output.path="../data/age-pred/finetuning_scores_v_bs256"      --conf conf/age_pred_target_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len150.p"   output.path="../data/age-pred/finetuning_scores_v_len150"     --conf conf/age_pred_target_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len60.p"    output.path="../data/age-pred/finetuning_scores_v_len60"      --conf conf/age_pred_target_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len250.p"   output.path="../data/age-pred/finetuning_scores_v_len250"     --conf conf/age_pred_target_dataset.hocon conf/age_pred_finetuning_params_train.json
 
 python -m scenario_age_pred compare_approaches --pos 5 6 7 8 9 10 11 12 13 --target_score_file_names \
     "finetuning_scores_v_base"     \
