@@ -4,6 +4,7 @@ from multiprocessing import Pool
 
 import pandas as pd
 import xgboost as xgb
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 
 from scenario_age_pred.features import load_features
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def prepare_parser(parser):
-    parser.add_argument('--n_workers', type=int, default=5)
+    parser.add_argument('--n_workers', type=int, default=4)
     parser.add_argument('--cv_n_split', type=int, default=5)
     parser.add_argument('--data_path', type=os.path.abspath, default='../data/age-pred/')
     parser.add_argument('--test_size', type=float, default=0.4)
@@ -21,6 +22,7 @@ def prepare_parser(parser):
     parser.add_argument('--ml_embedding_file_names', nargs='+', default=['embeddings.pickle'])
     parser.add_argument('--target_score_file_names', nargs='+', default=['target_scores', 'finetuning_scores'])
     parser.add_argument('--output_file', type=os.path.abspath, default='runs/scenario_age_pred.csv')
+    parser.add_argument('--pos', type=int, nargs='*', default=[])
 
 
 def read_target(conf):
@@ -29,9 +31,9 @@ def read_target(conf):
 
 
 def get_scores(args):
-    pos, fold_n, conf, params, train_target, valid_target = args
+    pos, fold_n, conf, params, model_type, train_target, valid_target = args
 
-    logger.info(f'[{pos:4}:{fold_n}] Started: {params}')
+    logger.info(f'[{pos:4}:{model_type:6}:{fold_n}] Started: {params}')
 
     features = load_features(conf, **params)
 
@@ -41,21 +43,25 @@ def get_scores(args):
     X_train = pd.concat([df.reindex(index=train_target.index) for df in features], axis=1)
     X_valid = pd.concat([df.reindex(index=valid_target.index) for df in features], axis=1)
 
-    model = xgb.XGBClassifier(
-        objective='multi:softprob',
-        num_class=4,
-        n_jobs=4,
-        seed=conf['model_seed'],
-        n_estimators=300)
+    if model_type == 'linear':
+        model = LogisticRegression()
+    else:
+        model = xgb.XGBClassifier(
+            objective='multi:softprob',
+            num_class=4,
+            n_jobs=4,
+            seed=conf['model_seed'],
+            n_estimators=300)
 
     model.fit(X_train, y_train)
     pred = model.predict(X_valid)
     accuracy = (y_valid == pred).mean()
 
-    logger.info(f'[{pos:4}:{fold_n}] Finished with accuracy {accuracy:.4f}: {params}')
+    logger.info(f'[{pos:4}:{model_type:6}:{fold_n}] Finished with accuracy {accuracy:.4f}: {params}')
 
     res = params.copy()
     res['pos'] = pos
+    res['model_type'] = model_type
     res['fold_n'] = fold_n
     res['accuracy'] = accuracy
     return res
@@ -76,7 +82,6 @@ def main(conf):
     ]
 
     df_target = read_target(conf)
-    df_target = df_target
     folds = []
     skf = StratifiedKFold(n_splits=conf['cv_n_split'], random_state=conf['random_state'], shuffle=True)
     for i_train, i_test in skf.split(df_target, df_target['bins']):
@@ -85,23 +90,25 @@ def main(conf):
             df_target.iloc[i_test]
         ))
 
-    args_list = [(pos, fold_n, conf, params, train_target, valid_target)
-                 for pos, params in enumerate(param_list)
-                 for fold_n, (train_target, valid_target) in enumerate(folds)]
+    args_list = [(pos, fold_n, conf, params, model_type, train_target, valid_target)
+                 for pos, params in enumerate(param_list) if len(conf['pos']) == 0 or pos in conf['pos']
+                 for fold_n, (train_target, valid_target) in enumerate(folds)
+                 for model_type in ['xgb', 'linear']
+                 ]
 
     pool = Pool(processes=conf['n_workers'])
     results = pool.map(get_scores, args_list)
-    df_results = pd.DataFrame(results).set_index('pos').drop(columns='fold_n')
+    df_results = pd.DataFrame(results).set_index(['pos', 'model_type']).drop(columns='fold_n')
     df_results = pd.concat([
-        df_results.groupby(level='pos')[['accuracy']].agg([
+        df_results.groupby(level=['pos', 'model_type'])[['accuracy']].agg([
             'mean', 'std', lambda x: '[' + ' '.join([f'{i:.3f}' for i in sorted(x)]) + ']']),
-        df_results.drop(columns='accuracy').groupby(level='pos').first(),
+        df_results.drop(columns='accuracy').groupby(level=['pos', 'model_type']).first(),
     ], axis=1).sort_index()
 
     with pd.option_context(
-        'display.float_format', '{:.4f}'.format,
-        'display.max_columns', None,
-        'display.expand_frame_repr', False,
+            'display.float_format', '{:.4f}'.format,
+            'display.max_columns', None,
+            'display.expand_frame_repr', False,
     ):
         logger.info(f'Results:\n{df_results}')
         with open(conf['output_file'], 'w') as f:

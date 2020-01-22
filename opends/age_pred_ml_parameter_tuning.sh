@@ -8,15 +8,15 @@ python metric_learning.py model_path.model="models/age_pred_ml_model_v_len150.p"
 python metric_learning.py model_path.model="models/age_pred_ml_model_v_len60.p"     params.rnn.hidden_size=256 params.train.n_epoch=150 params.train.batch_size=64  params.train.split_strategy.cnt_min=25  params.train.split_strategy.cnt_max=75  --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_train.json
 python metric_learning.py model_path.model="models/age_pred_ml_model_v_len250.p"    params.rnn.hidden_size=256 params.train.n_epoch=150 params.train.batch_size=64  params.train.split_strategy.cnt_min=200 params.train.split_strategy.cnt_max=300 --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_train.json
 
-python ml_inference.py model_path.models=["models/age_pred_ml_model_v_base.p"    ] output.path="../data/age_pred/embeddings_v_base"     --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
-python ml_inference.py model_path.models=["models/age_pred_ml_model_v_hs512.p"   ] output.path="../data/age_pred/embeddings_v_hs512"    --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
-python ml_inference.py model_path.models=["models/age_pred_ml_model_v_epoch250.p"] output.path="../data/age_pred/embeddings_v_epoch250" --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
-python ml_inference.py model_path.models=["models/age_pred_ml_model_v_bs32.p"    ] output.path="../data/age_pred/embeddings_v_bs32"     --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
-python ml_inference.py model_path.models=["models/age_pred_ml_model_v_bs128.p"   ] output.path="../data/age_pred/embeddings_v_bs128"    --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
-python ml_inference.py model_path.models=["models/age_pred_ml_model_v_bs256.p"   ] output.path="../data/age_pred/embeddings_v_bs256"    --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
-python ml_inference.py model_path.models=["models/age_pred_ml_model_v_len150.p"  ] output.path="../data/age_pred/embeddings_v_len150"   --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
-python ml_inference.py model_path.models=["models/age_pred_ml_model_v_len60.p"   ] output.path="../data/age_pred/embeddings_v_len60"    --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
-python ml_inference.py model_path.models=["models/age_pred_ml_model_v_len250.p"  ] output.path="../data/age_pred/embeddings_v_len250"   --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
+python ml_inference.py model_path.models=["models/age_pred_ml_model_v_base.p"    ] output.path="../data/age-pred/embeddings_v_base"     --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
+python ml_inference.py model_path.models=["models/age_pred_ml_model_v_hs512.p"   ] output.path="../data/age-pred/embeddings_v_hs512"    --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
+python ml_inference.py model_path.models=["models/age_pred_ml_model_v_epoch250.p"] output.path="../data/age-pred/embeddings_v_epoch250" --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
+python ml_inference.py model_path.models=["models/age_pred_ml_model_v_bs32.p"    ] output.path="../data/age-pred/embeddings_v_bs32"     --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
+python ml_inference.py model_path.models=["models/age_pred_ml_model_v_bs128.p"   ] output.path="../data/age-pred/embeddings_v_bs128"    --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
+python ml_inference.py model_path.models=["models/age_pred_ml_model_v_bs256.p"   ] output.path="../data/age-pred/embeddings_v_bs256"    --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
+python ml_inference.py model_path.models=["models/age_pred_ml_model_v_len150.p"  ] output.path="../data/age-pred/embeddings_v_len150"   --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
+python ml_inference.py model_path.models=["models/age_pred_ml_model_v_len60.p"   ] output.path="../data/age-pred/embeddings_v_len60"    --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
+python ml_inference.py model_path.models=["models/age_pred_ml_model_v_len250.p"  ] output.path="../data/age-pred/embeddings_v_len250"   --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
 
 python -m scenario_age_pred compare_approaches --pos 4 5 6 7 8 9 10 11 12 --ml_embedding_file_names \
     "embeddings_v_base.pickle"     \
@@ -51,17 +51,17 @@ python -m scenario_age_pred compare_approaches --pos 4 5 6 7 8 9 10 11 12 --ml_e
 #         xgb                       0.8423               0.0134  [0.826 0.832 0.845 0.850 0.859]     embeddings_v_len250.pickle
 
 
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_base.p"     output.path="../data/age_pred/finetuning_scores_v_base"       --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_hs512.p"    output.path="../data/age_pred/finetuning_scores_v_hs512"    params.rnn.hidden_size=512 --conf conf/gage_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_epoch250.p" output.path="../data/age_pred/finetuning_scores_v_epoch250"   --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs32.p"     output.path="../data/age_pred/finetuning_scores_v_bs32"       --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs128.p"    output.path="../data/age_pred/finetuning_scores_v_bs128"      --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs256.p"    output.path="../data/age_pred/finetuning_scores_v_bs256"      --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len150.p"   output.path="../data/age_pred/finetuning_scores_v_len150"     --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len60.p"    output.path="../data/age_pred/finetuning_scores_v_len60"      --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
-python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len250.p"   output.path="../data/age_pred/finetuning_scores_v_len250"     --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_base.p"     output.path="../data/age-pred/finetuning_scores_v_base"       --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_hs512.p"    output.path="../data/age-pred/finetuning_scores_v_hs512"    params.rnn.hidden_size=512 --conf conf/gage_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_epoch250.p" output.path="../data/age-pred/finetuning_scores_v_epoch250"   --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs32.p"     output.path="../data/age-pred/finetuning_scores_v_bs32"       --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs128.p"    output.path="../data/age-pred/finetuning_scores_v_bs128"      --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_bs256.p"    output.path="../data/age-pred/finetuning_scores_v_bs256"      --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len150.p"   output.path="../data/age-pred/finetuning_scores_v_len150"     --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len60.p"    output.path="../data/age-pred/finetuning_scores_v_len60"      --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
+python -m scenario_age_pred fit_finetuning params.pretrained_model_path="models/age_pred_ml_model_v_len250.p"   output.path="../data/age-pred/finetuning_scores_v_len250"     --conf conf/age_pred_dataset.hocon conf/age_pred_finetuning_params_train.json
 
-python -m scenario_gender compare_approaches --pos 5 6 7 8 9 10 11 12 13 --target_score_file_names \
+python -m scenario_age_pred compare_approaches --pos 5 6 7 8 9 10 11 12 13 --target_score_file_names \
     "finetuning_scores_v_base"     \
     "finetuning_scores_v_hs512"    \
     "finetuning_scores_v_epoch250" \
