@@ -52,6 +52,7 @@ def main(config):
     df_results = df[['name', 'fold_n'] + old_metric].rename(
         columns={k: v for k, v in zip(old_metric, metric_columns)})
 
+    df_results = df_results.sort_values(['name', 'fold_n'])
     df_results = group_stat_results(df_results, 'name', metric_columns, ['fold_n'])
 
     with pd.option_context(

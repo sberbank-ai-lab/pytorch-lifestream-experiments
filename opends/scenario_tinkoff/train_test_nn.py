@@ -1,7 +1,9 @@
 import logging
+from random import Random
 
 import torch
 
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import GroupKFold
 
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 def prepare_parser(sub_parser):
     sub_parser.add_argument('--name', required=True, type=str)
     sub_parser.add_argument('--cv_n_folds', type=int, default=5)
+    sub_parser.add_argument('--cv_salt', type=int, default=42)
 
     sub_parser.add_argument('--model_type', default='nn', choices=['nn'])
     sub_parser.add_argument('--device', type=str, default='cuda')
@@ -62,7 +65,7 @@ def train_test_model(config, fold_n, df_train, df_valid, df_test):
 
     if config.model_type == 'nn':
         user_encoder = get_encoder(df_train, COL_ID, min_count=2)
-        item_encoder = get_encoder(df_train, 'story_id')
+        item_encoder = get_encoder(df_train, 'story_id', min_count=10)
 
         model = StoriesRecModel(
             user_layers=config.user_layers,
@@ -105,9 +108,35 @@ def train_test_model(config, fold_n, df_train, df_valid, df_test):
     return model
 
 
+class GroupHashSplit:
+    def __init__(self, n_splits, salt):
+        self.n_splits = n_splits
+        self.salt = salt
+
+    def get_clients(self, X, groups):
+        unique_clients = set(cl_id for cl_id in groups)
+
+        client_list = (cl_id for cl_id in unique_clients)
+        client_list = sorted(client_list)
+        client_list = np.array([cl_id for cl_id in client_list])
+        Random(self.salt).shuffle(client_list)
+
+        n = len(client_list)
+        fold_len = (n + self.n_splits - 1) // self.n_splits
+
+        for i in range(self.n_splits):
+            yield client_list[i * fold_len: (i + 1) * fold_len]
+
+    def split(self, X, groups):
+        ix = np.arange(len(X))
+        for client_ids in self.get_clients(X, groups):
+            test_ix = groups.isin(client_ids)
+            yield ix[~test_ix], ix[test_ix]
+
+
 def main(config):
     df_log_train, df_log_test = load_data(config)
-    cv = GroupKFold(n_splits=config.cv_n_folds)
+    cv = GroupHashSplit(n_splits=config.cv_n_folds, salt=config.cv_salt)
 
     for fold_n, (i_train, i_valid) in enumerate(cv.split(df_log_train, groups=df_log_train[COL_ID])):
         logger.info(f'=== Train fold: {fold_n:3} ===')

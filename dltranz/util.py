@@ -158,7 +158,7 @@ def plot_arrays(a, b, title=None):
 
 def group_stat_results(df, group_col_name, col_agg_metric=None, col_list_metrics=None):
     def values(x):
-        return '[' + ' '.join([f'{i:.3f}' for i in sorted(x)]) + ']'
+        return '[' + ' '.join([f'{i:.3f}' for i in x]) + ']'
 
     def t_interval(x, p=0.95):
         import scipy.stats
