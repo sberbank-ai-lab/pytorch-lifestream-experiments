@@ -100,8 +100,8 @@ python -m scenario_tinkoff train --name 'baseline_const' --user_layers 1 --item_
 
 python -m scenario_tinkoff train --name 'no user features' --user_layers 1 --item_layers E
 python -m scenario_tinkoff train --name 'ml embeddings'  --use_embeddings --user_layers 1T --item_layers E1 --optim_weight_decay 0.0001  0.1 0.1  0.00001 --optim_lr 0.005
-python -m scenario_tinkoff train --name 'transactional stat'  --use_trans_common_features --use_trans_mcc_features --user_layers 1T --item_layers E1
-python -m scenario_tinkoff train --name 'social demograpy' --use_gender --user_layers 1T --item_layers E1
+python -m scenario_tinkoff train --name 'transactional stat'  --use_trans_common_features --use_trans_mcc_features --user_layers 1T --item_layers E1 --optim_weight_decay 0.0001  1 1  0.00001 --optim_lr 0.005
+python -m scenario_tinkoff train --name 'social demograpy' --use_gender --user_layers 1T --item_layers E1 --optim_weight_decay 0.0001  1 1  0.00001 --optim_lr 0.005
 
 # check the results
 python -m scenario_tinkoff convert_history_file --report_file "runs/scenario_tinkoff.csv"
