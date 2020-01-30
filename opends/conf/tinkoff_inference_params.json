@@ -1,4 +1,11 @@
 {
+  "dataset": {
+    "clip_transactions": {
+      "min_len": 1000,
+      "max_len": 1000
+    }
+  },
+
   "params": {
     "device": "cuda",
     "trx_encoder": {
@@ -27,6 +34,12 @@
 
   "output": {
     "path": "../data/tinkoff/embeddings",
+    "format": "pickle",
+    "columns": ["customer_id"]
+  },
+
+  "trx_features": {
+    "path": "../data/tinkoff/trx_features",
     "format": "pickle",
     "columns": ["customer_id"]
   }

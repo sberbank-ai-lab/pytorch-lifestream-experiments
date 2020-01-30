@@ -39,7 +39,7 @@ def parse_args(args=None):
 
 
 if __name__ == '__main__':
-    conf = parse_args(['compare_approaches'])
+    conf = parse_args()
     if 'func' not in conf:
         print('Choose scenario. Use --help for more information')
         exit(-1)

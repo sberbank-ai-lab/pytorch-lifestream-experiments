@@ -15,11 +15,11 @@ from scenario_tin_cls.features import load_features
 
 logger = logging.getLogger(__name__)
 
-MODEL_TYPES = ['linear', 'xgb']
+MODEL_TYPES = ['xgb']
 
 
 def prepare_parser(parser):
-    return prepare_common_parser(parser, data_path=DEFAULT_DATA_PATH, output_file=DEFAULT_RESULT_FILE)
+    prepare_common_parser(parser, data_path=DEFAULT_DATA_PATH, output_file=DEFAULT_RESULT_FILE)
 
 
 def main(conf):
@@ -27,14 +27,12 @@ def main(conf):
 
     pool = Pool(processes=conf['n_workers'])
 
-    for col_i, col_target in enumerate(COL_TARGET):
+    for col_i, col_target in enumerate(COL_TARGET[:1]):
         logger.info(f'=== Start for col_target={col_target} [{col_i + 1:2} / {len(COL_TARGET)}] ===')
 
         approaches_to_train = {
             'random': {'use_random': True},
-            'baseline trx': {'use_trans_common_features': True, 'use_trans_mcc_features': True},
-            'trans_common_features': {'use_trans_common_features': True},
-            'trans_mcc_features': {'use_trans_mcc_features': True},
+            'baseline_trx': {'metric_learning_embedding_name': 'trx_features.pickle'},
             **{
                 f"embeds: {file_name}": {'metric_learning_embedding_name': file_name}
                 for file_name in conf['ml_embedding_file_names']

@@ -4,7 +4,6 @@ from collections import namedtuple
 
 import lightgbm as lgb
 import pandas as pd
-import scipy.stats
 import xgboost as xgb
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
