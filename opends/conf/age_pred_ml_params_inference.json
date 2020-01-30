@@ -1,4 +1,11 @@
 {
+  "dataset": {
+    "clip_transactions": {
+      "min_len": 1000,
+      "max_len": 1000
+    }
+  },
+
   "params": {
     "device": "cuda",
     "trx_encoder": {
@@ -22,5 +29,17 @@
     "models": [
       "models/age_pred_ml_model.p"
     ]
+  },
+
+  "output": {
+    "path": "../data/age-pred/embeddings",
+    "format": "pickle",
+    "columns": ["client_id"]
+  },
+
+  "trx_features": {
+    "path": "../data/age-pred/trx_features",
+    "format": "pickle",
+    "columns": ["client_id"]
   }
 }

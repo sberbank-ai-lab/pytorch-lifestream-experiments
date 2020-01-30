@@ -10,10 +10,4 @@
   }
 
   stats.path: ${script_path}"/runs/age_pred_ml_result.json"
-
-  output: {
-    path: ${script_path}"/../data/age-pred/embeddings"
-    format: pickle
-    columns: ["client_id"]
-  }
 }
