@@ -1,4 +1,11 @@
 {
+  "dataset": {
+    "clip_transactions": {
+      "min_len": 1000,
+      "max_len": 1000
+    }
+  },
+
   "params": {
     "device": "cuda",
     "trx_encoder": {
@@ -26,6 +33,12 @@
 
   "output": {
     "path": "../data/gender/embeddings",
+    "format": "pickle",
+    "columns": ["customer_id"]
+  },
+
+  "trx_features": {
+    "path": "../data/gender/trx_features",
     "format": "pickle",
     "columns": ["customer_id"]
   }
