@@ -32,7 +32,7 @@ def main(conf):
 
         approaches_to_train = {
             'random': {'use_random': True},
-            'baseline_trx': {'metric_learning_embedding_name': 'trx_features.pickle'},
+            'baseline trx': {'use_trans_common_features': True, 'use_trans_mcc_features': True},
             **{
                 f"embeds: {file_name}": {'metric_learning_embedding_name': file_name}
                 for file_name in conf['ml_embedding_file_names']

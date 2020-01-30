@@ -46,7 +46,9 @@ def _small_group_stat(conf):
 
 def _metric_learning_embeddings(conf, file_name):
     df = pd.read_pickle(os.path.join(conf['data_path'], file_name)).set_index(COL_ID)
-    return df
+    # TODO: remove filter
+    cols = [col for col in df.columns if not col.startswith('trans_date_X_')]
+    return df[cols].copy()
 
 
 def load_features(
