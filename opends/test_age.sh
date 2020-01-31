@@ -1,4 +1,4 @@
-python ml_inference.py params.device="cuda:3" --conf conf/gender_dataset.hocon conf/gender_ml_params_inference.json
+python ml_inference.py params.device="cuda:3" --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
 
 python ml_inference.py params.device="cuda:3" dataset.clip_transactions.min_len=1000  dataset.clip_transactions.max_len=1000 output.path="../data/age-pred/embeddings_1000"  trx_features.path="../data/age-pred/trx_features_1000"  --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
 python ml_inference.py params.device="cuda:3" dataset.clip_transactions.min_len=100   dataset.clip_transactions.max_len=200  output.path="../data/age-pred/embeddings_0200"  trx_features.path="../data/age-pred/trx_features_0200"  --conf conf/age_pred_ml_dataset.hocon conf/age_pred_ml_params_inference.json
