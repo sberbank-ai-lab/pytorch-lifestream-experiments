@@ -31,6 +31,7 @@ def _client_agg(conf):
 def _mcc_code_stat(conf):
     df_transactions = pd.read_csv(os.path.join(conf['data_path'], 'transactions.csv'))
 
+    # df_transactions = df_transactions.assign(amount=lambda x: np.log1p(x['amount']))
     cat_counts_train = pd.concat([
         df_norm(df_transactions.pivot_table(
             index=COL_ID, columns='mcc_code', values='amount', aggfunc='count').fillna(0.0)),

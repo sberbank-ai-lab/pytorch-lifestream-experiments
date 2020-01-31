@@ -150,8 +150,8 @@ def main(conf):
     }
 
     approaches_to_score = {
-        f"scores: {file_name}": {'target_scores_name': file_name}
-        for file_name in conf['target_score_file_names']
+        # f"scores: {file_name}": {'target_scores_name': file_name}
+        # for file_name in conf['target_score_file_names']
     }
 
     df_target, test_target = read_train_test(conf['data_path'], DATASET_FILE, TEST_IDS_FILE, COL_ID)
@@ -160,7 +160,7 @@ def main(conf):
     args_list = [(name, fold_n, conf, params, model_type, train_target, valid_target, test_target)
                  for name, params in approaches_to_train.items()
                  for fold_n, (train_target, valid_target) in enumerate(folds)
-                 for model_type in ['xgb', 'linear','lgb']
+                 for model_type in ['xgb']
                  ]
 
     pool = Pool(processes=conf['n_workers'])
@@ -168,13 +168,14 @@ def main(conf):
     df_results = pd.DataFrame(results).set_index('name')[['oof_rocauc_score','test_rocauc_score']]
 
     # score already trained models on valid and tets sets
-    pool = Pool(processes=conf['n_workers'])
-    args_list = [(name, conf, params, df_target, test_target) for name, params in approaches_to_score.items()]
-    results = reduce(iadd, pool.map(get_scores, args_list))
-    df_scores = pd.DataFrame(results).set_index('name')[['oof_rocauc_score','test_rocauc_score']]
+    # pool = Pool(processes=conf['n_workers'])
+    # args_list = [(name, conf, params, df_target, test_target) for name, params in approaches_to_score.items()]
+    # results = pool.map(get_scores, args_list)
+    # df_scores = pd.DataFrame(results).set_index('name')[['oof_rocauc_score','test_rocauc_score']]
+    #
+    # # combine results
+    # df_results = pd.concat([df_results, df_scores])
 
-    # combine results
-    df_results = pd.concat([df_results, df_scores])
     df_results = group_stat_results(df_results, 'name', ['oof_rocauc_score', 'test_rocauc_score'])
 
     with pd.option_context(
