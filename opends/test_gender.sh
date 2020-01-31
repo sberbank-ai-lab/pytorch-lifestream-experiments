@@ -1,5 +1,6 @@
 python ml_inference.py params.device="cuda:2" --conf conf/gender_dataset.hocon conf/gender_ml_params_inference.json
 
+python ml_inference.py params.device="cuda:2" dataset.clip_transactions.min_len=100000  dataset.clip_transactions.max_len=100000 output.path="../data/gender/embeddings_9999"  trx_features.path="../data/gender/trx_features_9999"  --conf conf/gender_dataset.hocon conf/gender_ml_params_inference.json
 python ml_inference.py params.device="cuda:2" dataset.clip_transactions.min_len=2000  dataset.clip_transactions.max_len=2000 output.path="../data/gender/embeddings_2000"  trx_features.path="../data/gender/trx_features_2000"  --conf conf/gender_dataset.hocon conf/gender_ml_params_inference.json
 python ml_inference.py params.device="cuda:2" dataset.clip_transactions.min_len=1000  dataset.clip_transactions.max_len=1000 output.path="../data/gender/embeddings_1000"  trx_features.path="../data/gender/trx_features_1000"  --conf conf/gender_dataset.hocon conf/gender_ml_params_inference.json
 python ml_inference.py params.device="cuda:2" dataset.clip_transactions.min_len=100   dataset.clip_transactions.max_len=200  output.path="../data/gender/embeddings_0200"  trx_features.path="../data/gender/trx_features_0200"  --conf conf/gender_dataset.hocon conf/gender_ml_params_inference.json
@@ -10,6 +11,8 @@ python ml_inference.py params.device="cuda:2" dataset.clip_transactions.min_len=
 python ml_inference.py params.device="cuda:2" dataset.clip_transactions.min_len=5     dataset.clip_transactions.max_len=10   output.path="../data/gender/embeddings_0010"  trx_features.path="../data/gender/trx_features_0010"  --conf conf/gender_dataset.hocon conf/gender_ml_params_inference.json
 
 python -m scenario_gender compare_approaches --ml_embedding_file_names \
+    "embeddings_9999.pickle"  "trx_features_9999.pickle" \
+    "embeddings_2000.pickle"  "trx_features_2000.pickle" \
     "embeddings_1000.pickle"  "trx_features_1000.pickle" \
     "embeddings_0200.pickle"  "trx_features_0200.pickle" \
     "embeddings_0150.pickle"  "trx_features_0150.pickle" \

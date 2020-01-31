@@ -67,12 +67,14 @@ def read_dataset(path, conf):
 
 
 def make_trx_features(data, conf):
-    _num_percentile_list = [10, 25, 50, 75, 90]
+    _num_percentile_list = [0, 10, 25, 50, 75, 90, 100]
 
     def _num_features(col, val):
+        val_orig = np.expm1(abs(val)) * np.sign(val)
         return {
             f'{col}_count': len(val),
-            f'{col}_sum': val.sum(),
+            f'{col}_sum': val_orig.sum(),
+            f'{col}_std': val_orig.std(),
             f'{col}_mean': val.mean(),
             **{f'{col}_p{p_level}': val
                for val, p_level in zip(np.percentile(val, _num_percentile_list), _num_percentile_list)}
@@ -82,6 +84,8 @@ def make_trx_features(data, conf):
         def norm_row(a, agg_func):
             return a / (agg_func(a) + 1e-5)
 
+        val_num_orig = np.expm1(abs(val_num)) * np.sign(val_embed)
+
         seq_len = len(val_embed)
 
         m_cnt = np.zeros((seq_len, size), np.float)
@@ -89,12 +93,13 @@ def make_trx_features(data, conf):
         ix = np.arange(seq_len)
 
         m_cnt[(ix, val_embed)] = 1
-        m_sum[(ix, val_embed)] = val_num
+        m_sum[(ix, val_embed)] = val_num_orig
 
         return {
+            f'{col_embed}_nunique': np.unique(col_embed).size,
             **{f'{col_embed}_X_{col_num}_{k}_cnt': v for k, v in enumerate(norm_row(m_cnt.sum(axis=0), np.sum))},
             **{f'{col_embed}_X_{col_num}_{k}_sum': v for k, v in enumerate(norm_row(m_sum.sum(axis=0), np.sum))},
-            **{f'{col_embed}_X_{col_num}_{k}_std': v for k, v in enumerate(norm_row(m_sum.std(axis=0), np.max))},
+            **{f'{col_embed}_X_{col_num}_{k}_std': v for k, v in enumerate(norm_row(m_sum.std(axis=0), np.sum))},
         }
 
     numeric_values = conf['params.trx_encoder.numeric_values']
