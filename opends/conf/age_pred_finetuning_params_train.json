@@ -14,7 +14,7 @@
       }
     },
     "rnn": {
-      "hidden_size": 160
+      "hidden_size": 190
     },
     "head": {
       "pred_all_states": false,
