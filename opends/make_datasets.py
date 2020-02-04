@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import pickle
+import random
 from random import Random
 
 import numpy as np
@@ -129,6 +130,20 @@ def update_with_target(features, data_path, target_files, col_client_id, col_tar
     return features
 
 
+def resample_dataset(data):
+    lb = np.log(60)
+    ub = np.log(600)
+    s = (ub - lb) / 4
+    m = (ub + lb) / 2
+
+    for rec in data:
+        seq_len = len(rec['event_time'])
+        new_len = min(int(np.exp(random.normalvariate(m, s))), seq_len)
+
+        rec['event_time'] = rec['event_time'][-new_len:]
+        rec['feature_arrays'] = {k: v[-new_len:] for k, v in rec['feature_arrays'].items()}
+
+
 def split_dataset(all_data, test_size, data_path, target_files, col_client_id, salt):
     df_target = pd.concat([pd.read_csv(os.path.join(data_path, file)) for file in target_files])
     s_clients = set(df_target[col_client_id].tolist())
@@ -196,6 +211,8 @@ if __name__ == '__main__':
             col_client_id=config.col_client_id,
             col_target=config.col_target,
         )
+
+    resample_dataset(client_features)
 
     if config.test_size > 0:
         train, test = split_dataset(

@@ -65,6 +65,7 @@ def main(conf):
 
     df_target, test_target = sct.read_train_test(conf['data_path'], DATASET_FILE, TEST_IDS_FILE, COL_ID)
     folds = sct.get_folds(df_target, COL_TARGET, conf['cv_n_split'], conf['random_state'])
+    folds = [(t[:len(t) // 4], v) for t, v in folds]
 
     model_types = {
         'xgb': dict(
