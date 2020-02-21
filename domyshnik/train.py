@@ -114,7 +114,9 @@ class Learner:
 
 
 def main():
-    mnist_metriclearning_learner = Learner(launch_info=mnist_metriclearning_lunch_info)
-    mnist_metriclearning_learner.fit()
+    mnist_classification_metriclearning_learner = Learner(launch_info=mnist_classification_metriclearning_lunch_info)
+    mnist_classification_metriclearning_learner.fit()
+    #mnist_metriclearning_learner = Learner(launch_info=mnist_metriclearning_lunch_info)
+    #mnist_metriclearning_learner.fit()
 
 main()

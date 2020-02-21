@@ -11,7 +11,7 @@ WEIGHTS_PATH = '/mnt/data/molchanov/models'
 MODEL_POSTFIX = ''
 
 SAVE_MODELS = True
-CURRENT_PARAMS = 'metric_learning_per_class'
+CURRENT_PARAMS = 'classification_metric_learning_per_sampl'
 
 class config_params:
 
@@ -58,7 +58,18 @@ PARAMS = {
                                                negatives_cnt=3,
                                                marging=0.5,
                                                step_size=1,
-                                               model_postfix='per_sampl')
+                                               model_postfix='per_sampl'),
+
+    "classification_metric_learning_per_sampl": config_params(n_augments=1,
+                                                             lr=0.002,
+                                                             gamma=0.9025,
+                                                             batch_size=128,
+                                                             epochs=20,
+                                                             sampling_strategy='HardNegativePair',
+                                                             negatives_cnt=3,
+                                                             marging=0.5,
+                                                             step_size=1,
+                                                             model_postfix='per_sampl')                                               
 }
 
 cparams = PARAMS[CURRENT_PARAMS]

@@ -64,6 +64,30 @@ class MnistMetricLearningNet(nn.Module):
 
 # --------------------------------------------------------------------------------------------------
 
+class MnistClassificationMetricLearningModel(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.metric_learn_model = get_mnist_metriclearning_model()
+        self.metric_learn_model.train()
+        for param in self.metric_learn_model.parameters():
+            param.requires_grad = False
+
+        self.fc1 = nn.Linear(32, 10)
+
+    def forward(self, x):
+        if len(x.size()) == 4:
+            x = x[:, -1, :, :].unsqueeze(1) # get augmented image
+        else:
+            x = x.unsqueeze(1)
+        x = self.metric_learn_model(x)
+        x = self.fc1(x)
+        output = F.log_softmax(x, dim=1)
+        return output
+
+
+# --------------------------------------------------------------------------------------------------
+
 class MnistDomyshnikNetNet(nn.Module):
     def __init__(self):
         super().__init__()

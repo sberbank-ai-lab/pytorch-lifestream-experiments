@@ -61,6 +61,19 @@ mnist_classification_lunch_info = LaunchInfo(model=MnistClassificationNet(),
                                              device='cuda',
                                              mode='classification',
                                              model_name='mnist_classification.w')
+
+mnist_classification_metriclearning_lunch_info = LaunchInfo(model=MnistClassificationMetricLearningModel(), 
+                                                            loss=torch.nn.NLLLoss(), 
+                                                            optimizer=None, 
+                                                            scheduler=None, 
+                                                            train_loader=get_mnist_train_loader(batch_size=BATCH_SIZE, 
+                                                                                                n_augments=N_AUGMENTS), 
+                                                            test_loader=get_mnist_test_loader(batch_size=BATCH_SIZE, 
+                                                                                            n_augments=0), 
+                                                            epochs=EPOCHS, 
+                                                            device='cuda',
+                                                            mode='classification',
+                                                            model_name='mnist_classification_metriclearning.w')                                             
     
 mnist_metriclearning_lunch_info = LaunchInfo(model=MnistMetricLearningNet(), 
                                              loss=ContrastiveLoss(margin=MARGING, 
