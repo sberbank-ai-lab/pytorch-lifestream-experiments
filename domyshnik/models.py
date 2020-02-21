@@ -97,8 +97,12 @@ def save_model_params(model, model_name):
     print(f'model saved to {pth}')
 
 def load_model_params(model, model_name):
-    pth = osp.join(WEIGHTS_PATH, model_name, MODEL_POSTFIX)
+    pth = osp.join(WEIGHTS_PATH, model_name)
     model.load_state_dict(torch.load(pth))
     model.eval()
     print(f'load model {pth}')
     return model
+
+def get_mnist_metriclearning_model():
+    model = MnistMetricLearningNet()
+    return load_model_params(model, 'mnist_metric_learning.w')

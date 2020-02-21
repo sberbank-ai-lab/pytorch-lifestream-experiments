@@ -47,7 +47,7 @@ PARAMS = {
                                                negatives_cnt=6,
                                                marging=0.5,
                                                step_size=5,
-                                               model_postfix='per_class'),
+                                               model_postfix=''),
 
     "metric_learning_per_sampl": config_params(n_augments=15,
                                                lr=0.002,

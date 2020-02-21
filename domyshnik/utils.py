@@ -60,7 +60,7 @@ mnist_classification_lunch_info = LaunchInfo(model=MnistClassificationNet(),
                                              epochs=EPOCHS, 
                                              device='cuda',
                                              mode='classification',
-                                             model_name='mnist_classification')
+                                             model_name='mnist_classification.w')
     
 mnist_metriclearning_lunch_info = LaunchInfo(model=MnistMetricLearningNet(), 
                                              loss=ContrastiveLoss(margin=MARGING, 
@@ -74,4 +74,4 @@ mnist_metriclearning_lunch_info = LaunchInfo(model=MnistMetricLearningNet(),
                                              epochs=EPOCHS, 
                                              device='cuda',
                                              mode='metric_learning',
-                                             model_name='mnist_metric_learning')
+                                             model_name='mnist_metric_learning.w')
