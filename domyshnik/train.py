@@ -6,9 +6,9 @@ import torch
 import torch.nn.functional as F
 import tqdm
 import numpy as np
+from domyshnik.utils import *
 from domyshnik.constants import *
 from dltranz.metric_learn.metric import metric_Recall_top_K
-from domyshnik.utils import *
 
 class Learner:
     
@@ -24,6 +24,7 @@ class Learner:
         self.test_loader = self.info.test_loader
         self.device = self.info.device
         self.mode = self.info.mode
+        self.model_name = self.info.model_name
         
         
     def train_epoch(self, step):
@@ -43,7 +44,7 @@ class Learner:
                 
                 loss = self.loss(out, labels)
                 if self.mode == 'metric_learning':
-                    loss, pos_neg_len = loss[0]/loss[1], loss[1]
+                    loss, pos_neg_len = loss[0], loss[1]
                 losses.append(loss.item())
                 loss_val = self.running_average(losses)
                 loss.backward()
@@ -54,8 +55,7 @@ class Learner:
                 if self.mode == 'classification':
                     steps.set_postfix({"loss": '{:.5E}'.format(loss_val)})
                 elif self.mode == 'metric_learning':
-                    steps.set_postfix({"loss": '{:.5E}'.format(loss_val),
-                                       "pos_neg_len": pos_neg_len})
+                    steps.set_postfix({"loss": '{:.5E}'.format(loss_val)})
                 steps.update()
         
     def test_epoch(self, step):
@@ -93,8 +93,7 @@ class Learner:
                         steps.set_postfix({"loss": '{:.5E}'.format(loss_val), "accuracy": accuracy})
                     elif self.mode == 'metric_learning':
                         steps.set_postfix({"loss": '{:.5E}'.format(loss_val),
-                                           "batch_recall": batch_recall,
-                                           "total_recall": total_recall/(itr+1)})
+                                           "RECALL": total_recall/(itr+1)})
                     steps.update()
         
     def fit(self):
@@ -102,6 +101,8 @@ class Learner:
             self.train_epoch(step + 1)
             self.test_epoch(step + 1)
             self.scheduler.step()
+        if SAVE_MODELS:
+            save_model_params(self.model, self.model_name)
             
     def data_to_device(self, data):
         return data[0].to(self.device).float(), data[1].to(self.device)
@@ -113,7 +114,6 @@ class Learner:
 
 
 def main():
-    print('lets start')
     mnist_metriclearning_learner = Learner(launch_info=mnist_metriclearning_lunch_info)
     mnist_metriclearning_learner.fit()
 

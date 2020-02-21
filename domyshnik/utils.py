@@ -17,11 +17,12 @@ def get_sampling_strategy(params='HardNegativePair'):
 
 class LaunchInfo:
     
-    def __init__(self, model, loss, optimizer, scheduler, train_loader, test_loader, epochs, device, mode):
+    def __init__(self, model, loss, optimizer, scheduler, train_loader, test_loader, epochs, device, mode, model_name):
         self.model = model
         self.loss = loss
         self.epochs = epochs
         self.mode = mode
+        self.model_name = model_name
         
         if optimizer is not None:
             self.optimizer = optimizer
@@ -32,7 +33,7 @@ class LaunchInfo:
             self.scheduler = scheduler
         else:
             self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer,
-                                                             step_size=1,
+                                                             step_size=STEP_SIZE,
                                                              gamma=GAMMA)
             
         self.train_loader = train_loader
@@ -58,7 +59,8 @@ mnist_classification_lunch_info = LaunchInfo(model=MnistClassificationNet(),
                                                                                n_augments=N_AUGMENTS), 
                                              epochs=EPOCHS, 
                                              device='cuda',
-                                             mode='classification')
+                                             mode='classification',
+                                             model_name='mnist_classification')
     
 mnist_metriclearning_lunch_info = LaunchInfo(model=MnistMetricLearningNet(), 
                                              loss=ContrastiveLoss(margin=MARGING, 
@@ -71,4 +73,5 @@ mnist_metriclearning_lunch_info = LaunchInfo(model=MnistMetricLearningNet(),
                                                                                n_augments=N_AUGMENTS), 
                                              epochs=EPOCHS, 
                                              device='cuda',
-                                             mode='metric_learning')
+                                             mode='metric_learning',
+                                             model_name='mnist_metric_learning')
