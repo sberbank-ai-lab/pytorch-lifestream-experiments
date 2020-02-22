@@ -9,9 +9,10 @@ MARGING = 0.5#0.1
 STEP_SIZE = 5
 WEIGHTS_PATH = '/mnt/data/molchanov/models'
 MODEL_POSTFIX = ''
+NUM_CLASSES = 10
 
 SAVE_MODELS = True
-CURRENT_PARAMS = 'classification_metric_learning_per_sampl'
+CURRENT_PARAMS = 'domyshnik'
 
 class config_params:
 
@@ -69,7 +70,18 @@ PARAMS = {
                                                              negatives_cnt=3,
                                                              marging=0.5,
                                                              step_size=1,
-                                                             model_postfix='per_sampl')                                               
+                                                             model_postfix='per_sampl'),
+
+    "domyshnik": config_params(n_augments=5,
+                               lr=0.002,
+                               gamma=0.9025,
+                               batch_size=32,
+                               epochs=20,
+                               sampling_strategy='HardNegativePair',
+                               negatives_cnt=1,
+                               marging=0.01,
+                               step_size=5,
+                               model_postfix=''),                                                                                                            
 }
 
 cparams = PARAMS[CURRENT_PARAMS]

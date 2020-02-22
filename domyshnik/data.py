@@ -3,6 +3,9 @@ import torchvision
 from torchvision import transforms
 import matplotlib.pyplot as plt
 import numpy as np
+import random
+
+from domyshnik.constants import *
 
 
 mnist_train_dataset = torchvision.datasets.MNIST('/mnt/data/molchanov/datasets/mnist', 
@@ -39,14 +42,14 @@ def mnist_torch_augmentation(p=1):
 # -------------------------------------------------------------------------------------------------
 class MetrLearnDataset(torch.utils.data.Dataset):
     
-    def __init__(self, dataset, augmenter, n_augments=10):
+    def __init__(self, dataset, augmenter, n_augments=10, augment_labels=False):
         self.data = dataset
         self.aug = augmenter
         self.n_augments = n_augments
+        self.augment_labels = augment_labels
         
     def draw(self, idx):
-        imgs, lbl = self[idx]
-        print(imgs.shape, lbl)
+        imgs, _ = self[idx]
         fig = plt.figure()
         rows, columns = 1, imgs.shape[0]
         for i in range(imgs.shape[0]):
@@ -61,13 +64,19 @@ class MetrLearnDataset(torch.utils.data.Dataset):
         img, lbl = self.data[idx]
         imgs = [transforms.ToTensor()(img)] + [self.aug(img) for i in range(self.n_augments)]
         b_img = torch.stack(imgs).squeeze()
-        return b_img, lbl
+        if not self.augment_labels:
+            return b_img, lbl
+        else:
+            new_lbl = random.randint(0, NUM_CLASSES - 1)
+            reward = -1.0 if lbl == new_lbl else -0.1
+            return b_img, (new_lbl, lbl, reward)
         
     
-def get_mnist_train_loader(batch_size, n_augments=4):
+def get_mnist_train_loader(batch_size, n_augments=4, augment_labels=False):
     data_train = MetrLearnDataset(dataset=mnist_train_dataset, 
                             augmenter=mnist_torch_augmentation(p=1), 
-                            n_augments=n_augments)
+                            n_augments=n_augments,
+                            augment_labels=augment_labels)
     
     train_data_loader = torch.utils.data.DataLoader(data_train,
                                           batch_size=batch_size,
@@ -75,10 +84,11 @@ def get_mnist_train_loader(batch_size, n_augments=4):
                                           num_workers=16)
     return train_data_loader
     
-def get_mnist_test_loader(batch_size, n_augments=4):
+def get_mnist_test_loader(batch_size, n_augments=4, augment_labels=False):
     data_test = MetrLearnDataset(dataset=mnist_test_dataset, 
                             augmenter=mnist_torch_augmentation(p=1), 
-                            n_augments=n_augments)
+                            n_augments=n_augments,
+                            augment_labels=augment_labels)
         
     test_data_loader = torch.utils.data.DataLoader(data_test,
                                               batch_size=batch_size,

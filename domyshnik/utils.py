@@ -4,6 +4,7 @@ from domyshnik.data import *
 from dltranz.metric_learn.losses import ContrastiveLoss
 from dltranz.metric_learn.sampling_strategies import HardNegativePairSelector
 from domyshnik.constants import *
+from domyshnik.losses import *
 
 def get_sampling_strategy(params='HardNegativePair'):
     if params == 'HardNegativePair':
@@ -88,3 +89,21 @@ mnist_metriclearning_lunch_info = LaunchInfo(model=MnistMetricLearningNet(),
                                              device='cuda',
                                              mode='metric_learning',
                                              model_name='mnist_metric_learning.w')
+
+mnist_domyshnik_lunch_info = LaunchInfo(model=MnistDomyshnikNetNet(), 
+                                             loss=LocalConstantLoss(margin=MARGING, 
+                                                                    pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
+                                             optimizer=None, 
+                                             scheduler=None, 
+                                             train_loader=get_mnist_train_loader(batch_size=BATCH_SIZE, 
+                                                                                 n_augments=N_AUGMENTS,
+                                                                                 augment_labels=True), 
+                                             test_loader=get_mnist_test_loader(batch_size=BATCH_SIZE, 
+                                                                               n_augments=N_AUGMENTS,
+                                                                               augment_labels=True), 
+                                             epochs=EPOCHS, 
+                                             device='cuda',
+                                             mode='domyshnik',
+                                             model_name='mnist_domushnik.w')                                             
+
+                                             
