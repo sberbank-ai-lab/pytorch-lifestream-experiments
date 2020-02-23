@@ -25,9 +25,9 @@ mnist_test_dataset = torchvision.datasets.MNIST('/mnt/data/molchanov/datasets/mn
 def mnist_torch_augmentation(p=1):
     return torchvision.transforms.Compose([
         transforms.RandomChoice([
-            transforms.RandomAffine(degrees=7, 
-                                translate=(0.1, 0.1), 
-                                scale=(0.9, 0.9), 
+            transforms.RandomAffine(degrees=20, 
+                                translate=(0.2, 0.2), 
+                                scale=(0.8, 0.8), 
                                 shear=None, 
                                 resample=False, 
                                 fillcolor=0),
@@ -68,7 +68,7 @@ class MetrLearnDataset(torch.utils.data.Dataset):
             return b_img, lbl
         else:
             new_lbl = random.randint(0, NUM_CLASSES - 1)
-            reward = -1.0 if lbl == new_lbl else -0.1
+            reward = -1.0 if lbl == new_lbl else -0.8
             return b_img, (new_lbl, lbl, reward)
         
     

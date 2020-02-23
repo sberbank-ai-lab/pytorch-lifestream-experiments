@@ -1,7 +1,6 @@
 import torch
 from domyshnik.models import * 
 from domyshnik.data import *
-from dltranz.metric_learn.losses import ContrastiveLoss
 from dltranz.metric_learn.sampling_strategies import HardNegativePairSelector
 from domyshnik.constants import *
 from domyshnik.losses import *

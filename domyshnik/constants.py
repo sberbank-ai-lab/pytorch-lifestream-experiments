@@ -12,7 +12,7 @@ MODEL_POSTFIX = ''
 NUM_CLASSES = 10
 
 SAVE_MODELS = True
-CURRENT_PARAMS = 'domyshnik'
+CURRENT_PARAMS = 'metric_learning_per_sampl'
 
 class config_params:
 
@@ -48,18 +48,18 @@ PARAMS = {
                                                negatives_cnt=6,
                                                marging=0.5,
                                                step_size=5,
-                                               model_postfix=''),
+                                               model_postfix='mnist_per_class'),
 
     "metric_learning_per_sampl": config_params(n_augments=15,
                                                lr=0.002,
                                                gamma=0.9025,
                                                batch_size=32,
-                                               epochs=20,
+                                               epochs=30,
                                                sampling_strategy='HardNegativePair',
                                                negatives_cnt=3,
                                                marging=0.5,
-                                               step_size=1,
-                                               model_postfix='per_sampl'),
+                                               step_size=5,
+                                               model_postfix='mnist_per_sampl'),
 
     "classification_metric_learning_per_sampl": config_params(n_augments=1,
                                                              lr=0.002,
@@ -70,18 +70,18 @@ PARAMS = {
                                                              negatives_cnt=3,
                                                              marging=0.5,
                                                              step_size=1,
-                                                             model_postfix='per_sampl'),
+                                                             model_postfix='mnist_per_sampl'),
 
-    "domyshnik": config_params(n_augments=5,
+    "domyshnik": config_params(n_augments=15,
                                lr=0.002,
                                gamma=0.9025,
-                               batch_size=32,
+                               batch_size=512,
                                epochs=20,
                                sampling_strategy='HardNegativePair',
-                               negatives_cnt=1,
+                               negatives_cnt=6,
                                marging=0.01,
-                               step_size=5,
-                               model_postfix=''),                                                                                                            
+                               step_size=2,
+                               model_postfix='mnist'),                                                                                                            
 }
 
 cparams = PARAMS[CURRENT_PARAMS]
@@ -97,6 +97,7 @@ STEP_SIZE = cparams.step_size
 MODEL_POSTFIX = cparams.model_postfix
 
 print(f'model _params:\n\
+        CURRENT_PARAMS {CURRENT_PARAMS}\n\
         N_AUGMENTS {N_AUGMENTS}\n\
         LEARNING_RATE {LEARNING_RATE}\n\
         GAMMA {GAMMA}\n\
