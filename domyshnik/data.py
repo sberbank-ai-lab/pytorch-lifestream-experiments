@@ -8,29 +8,37 @@ import random
 from domyshnik.constants import *
 
 
-mnist_train_dataset = torchvision.datasets.MNIST('/mnt/data/molchanov/datasets/mnist', 
+def mnist_train_dataset():
+    tmp = torchvision.datasets.MNIST('/mnt/data/molchanov/datasets/mnist', 
                                            train=True, 
                                            transform=None, 
                                            target_transform=None, 
                                            download=True)
+    return tmp
 
-mnist_test_dataset = torchvision.datasets.MNIST('/mnt/data/molchanov/datasets/mnist', 
+def mnist_test_dataset():
+    tmp = torchvision.datasets.MNIST('/mnt/data/molchanov/datasets/mnist', 
                                            train=False, 
                                            transform=None, 
                                            target_transform=None, 
                                            download=True)
+    return tmp
 
-cifar10_train_dataset = torchvision.datasets.CIFAR10('/mnt/data/molchanov/datasets/cifar10', 
+def cifar10_train_dataset():
+    tmp = torchvision.datasets.CIFAR10('/mnt/data/molchanov/datasets/cifar10', 
                                                train=True, 
                                                transform=None, 
                                                target_transform=None, 
                                                download=True)
+    return tmp
 
-cifar10_test_dataset = torchvision.datasets.CIFAR10('/mnt/data/molchanov/datasets/cifar10', 
+def cifar10_test_dataset():
+    tmp = torchvision.datasets.CIFAR10('/mnt/data/molchanov/datasets/cifar10', 
                                                train=False, 
                                                transform=None, 
                                                target_transform=None, 
                                                download=True)
+    return tmp
 
 # -------------------------------------------------------------------------------------------------
 
@@ -102,7 +110,7 @@ class MetrLearnDataset(torch.utils.data.Dataset):
         
     
 def get_mnist_train_loader(batch_size, n_augments=4, augment_labels=False):
-    data_train = MetrLearnDataset(dataset=mnist_train_dataset, 
+    data_train = MetrLearnDataset(dataset=mnist_train_dataset(), 
                             augmenter=mnist_torch_augmentation(p=1), 
                             n_augments=n_augments,
                             augment_labels=augment_labels)
@@ -114,7 +122,7 @@ def get_mnist_train_loader(batch_size, n_augments=4, augment_labels=False):
     return train_data_loader
     
 def get_mnist_test_loader(batch_size, n_augments=4, augment_labels=False):
-    data_test = MetrLearnDataset(dataset=mnist_test_dataset, 
+    data_test = MetrLearnDataset(dataset=mnist_test_dataset(), 
                             augmenter=mnist_torch_augmentation(p=1), 
                             n_augments=n_augments,
                             augment_labels=augment_labels)
@@ -126,7 +134,7 @@ def get_mnist_test_loader(batch_size, n_augments=4, augment_labels=False):
     return test_data_loader
 
 def get_cifar10_train_loader(batch_size, n_augments=4, augment_labels=False):
-    data_train = MetrLearnDataset(dataset=cifar10_train_dataset, 
+    data_train = MetrLearnDataset(dataset=cifar10_train_dataset(), 
                             augmenter=cifar_torch_augmentation(p=1), 
                             n_augments=n_augments,
                             augment_labels=augment_labels)
@@ -138,7 +146,7 @@ def get_cifar10_train_loader(batch_size, n_augments=4, augment_labels=False):
     return train_data_loader
     
 def get_cifar10_test_loader(batch_size, n_augments=4, augment_labels=False):
-    data_test = MetrLearnDataset(dataset=cifar10_test_dataset, 
+    data_test = MetrLearnDataset(dataset=cifar10_test_dataset(), 
                             augmenter=cifar_torch_augmentation(p=1), 
                             n_augments=n_augments,
                             augment_labels=augment_labels)

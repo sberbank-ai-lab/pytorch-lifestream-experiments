@@ -100,12 +100,13 @@ class Learner:
                     #loss = 100000000*loss_pos + 0*10000*loss_neg + 10000*reward
                     alpha = -reward.item()/(loss_pos.item() + 0.0000001)
                     betta = -reward.item()/(loss_neg.item() + 0.0000001)
-                    #loss = loss_pos + loss_neg + reward
-                    loss =  10*alpha * loss_pos + 20*betta * loss_neg + reward
+                    k_pos, k_neg, k_reward = 0.25, 500, 5
+                    loss = k_pos * loss_pos + k_neg * loss_neg + k_reward * reward
+                    #loss =  10*alpha * loss_pos + 20*betta * loss_neg + reward
 
-                    steps.set_postfix({"loss_pos": loss_pos_val,
-                                       "loss neg": loss_neg_val,
-                                       "reward loss": reward_val,
+                    steps.set_postfix({"loss_pos": loss_pos_val * k_pos,
+                                       "loss neg": loss_neg_val * k_neg,
+                                       "reward loss": reward_val * k_reward,
                                        #"alpha=reward/pos_los": alpha,
                                        "accuracy": accuracy})
 

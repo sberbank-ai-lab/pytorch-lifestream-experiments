@@ -86,7 +86,7 @@ def get_launch_info():
     elif CURRENT_PARAMS in ['metric_learning_per_sampl', 'metric_learning_per_class']:                                         
         mnist_metriclearning_lunch_info = LaunchInfo(model=MnistMetricLearningNet3(), 
                                                     loss=ContrastiveLoss(margin=MARGING, 
-                                                                        pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
+                                                                         pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
                                                     optimizer=None, 
                                                     scheduler=None, 
                                                     train_loader=get_mnist_train_loader(batch_size=BATCH_SIZE, 

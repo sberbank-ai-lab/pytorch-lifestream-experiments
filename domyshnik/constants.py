@@ -13,7 +13,7 @@ NUM_CLASSES = 10
 ADD_INFO = None
 
 SAVE_MODELS = True
-CURRENT_PARAMS = 'metric_learning_per_sampl'
+CURRENT_PARAMS = 'domyshnik'
 
 class config_params:
 
@@ -54,10 +54,10 @@ PARAMS = {
                                                step_size=3,
                                                model_postfix='mnist_per_class'),
 
-    "metric_learning_per_sampl": config_params(n_augments=20,
+    "metric_learning_per_sampl": config_params(n_augments=15,
                                                lr=0.002,
                                                gamma=0.9025,
-                                               batch_size=512,
+                                               batch_size=256,
                                                epochs=15,
                                                sampling_strategy='HardNegativePair',
                                                negatives_cnt=10,
@@ -83,7 +83,7 @@ PARAMS = {
                                epochs=30,
                                sampling_strategy='HardNegativePair',
                                negatives_cnt=10,
-                               marging=0.5,
+                               marging=0.1,
                                step_size=5,
                                model_postfix='mnist'),
 

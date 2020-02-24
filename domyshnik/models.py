@@ -98,7 +98,8 @@ class MnistMetricLearningNet3(nn.Module):
         x = x.view(-1, 1, x.size(-2), x.size(-1)) # b, augs, x, y -> b*augs, 1, x, y
         x = x.repeat(1, 3, 1, 1)
         x = self.w(x)
-        x = self.norm(self.f(self.fc(x)))
+        #x = self.f(self.fc(x))
+        x = self.norm(self.fc(self.f(x)))
         return x
 
 class Cifar10MetricLearningNet(nn.Module):
