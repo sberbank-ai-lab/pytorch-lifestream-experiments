@@ -24,6 +24,7 @@ class Learner:
         self.device = self.info.device
         self.mode = self.info.mode
         self.model_name = self.info.model_name
+        self.add_info = self.info.add_info
         
     def train_epoch(self, step):
         self.model.train()
@@ -58,15 +59,21 @@ class Learner:
                         K = N_AUGMENTS * int(BATCH_SIZE/10)
                         labels = labels.view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
 
-                    loss = self.loss(out, labels)
-                    loss, _ = loss[0], loss[1]
-                    losses.append(loss.item())
-                    loss_val = self.running_average(losses)
+                    loss_pos, loss_neg = self.loss(out, labels)
+                    losses_pos.append(loss_pos.item())
+                    losses_neg.append(loss_neg.item())
+                    loss_pos_val = self.running_average(losses_pos)
+                    loss_neg_val = self.running_average(losses_neg)
+
+                    loss = loss_pos + 10 * loss_neg
 
                     total_recall += metric_Recall_top_K(out, labels, K)
 
-                    steps.set_postfix({"loss": loss_val,
-                                       "recall": total_recall/(itr + 1)})
+                    margings = self.loss.get_margings()
+                    steps.set_postfix({"loss_pos": loss_pos_val,
+                                       "loss neg": loss_neg_val,
+                                       "recall": total_recall/(itr + 1),
+                                       "margings": margings})
 
                 elif self.mode == 'domyshnik':
                     labels, old_labels, rewards = labels[0], labels[1], labels[2]
@@ -93,10 +100,11 @@ class Learner:
                     #loss = 100000000*loss_pos + 0*10000*loss_neg + 10000*reward
                     alpha = -reward.item()/(loss_pos.item() + 0.0000001)
                     betta = -reward.item()/(loss_neg.item() + 0.0000001)
-                    loss =  0 * 0.5 * alpha * loss_pos + 0 * 20 * betta * loss_neg + 10*reward
+                    #loss = loss_pos + loss_neg + reward
+                    loss =  10*alpha * loss_pos + 20*betta * loss_neg + reward
 
                     steps.set_postfix({"loss_pos": loss_pos_val,
-                                       "local loss neg": loss_neg_val,
+                                       "loss neg": loss_neg_val,
                                        "reward loss": reward_val,
                                        #"alpha=reward/pos_los": alpha,
                                        "accuracy": accuracy})
@@ -139,15 +147,21 @@ class Learner:
                             K = N_AUGMENTS * int(BATCH_SIZE/10)
                             labels = labels.view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
 
-                        loss = self.loss(out, labels)
-                        loss, _ = loss[0], loss[1]
-                        losses.append(loss.item())
-                        loss_val = self.running_average(losses)
+                        loss_pos, loss_neg = self.loss(out, labels)
+                        losses_pos.append(loss_pos.item())
+                        losses_neg.append(loss_neg.item())
+                        loss_pos_val = self.running_average(losses_pos)
+                        loss_neg_val = self.running_average(losses_neg)
+
+                        loss = loss_pos + loss_neg
 
                         total_recall += metric_Recall_top_K(out, labels, K)
 
-                        steps.set_postfix({"loss": loss_val,
-                                           "recall": total_recall/(itr + 1)})
+                        margings = self.loss.get_margings()
+                        steps.set_postfix({"loss_pos": loss_pos_val,
+                                        "loss neg": loss_neg_val,
+                                        "recall": total_recall/(itr + 1),
+                                        "margings": margings})
 
                     elif self.mode == 'domyshnik':
                         labels, old_labels, rewards = labels[0], labels[1], labels[2]
@@ -180,6 +194,8 @@ class Learner:
 
                     steps.set_description(f"test: epoch {step}, step {itr}/{len(self.train_loader)}")
                     steps.update()
+                self.loss.step()
+                #self.loss.step(gamma_pos=0.85, gamma_neg=0.978)
         
     def fit(self):
         for step in range(self.epochs):
@@ -205,17 +221,7 @@ class Learner:
 
 
 def main():
-    if CURRENT_PARAMS in ['metric_learning_per_sampl', 'metric_learning_per_class']:
-        mnist_metriclearning_learner = Learner(launch_info=mnist_metriclearning_lunch_info)
-        mnist_metriclearning_learner.fit()
-
-    elif CURRENT_PARAMS == 'domyshnik':
-        mnist_domyshnik_learner = Learner(launch_info=mnist_domyshnik_lunch_info)
-        mnist_domyshnik_learner.fit()
-
-    elif CURRENT_PARAMS == 'classification_metric_learning_per_sampl':
-        mnist_classification_metriclearning_learner = Learner(launch_info=mnist_classification_metriclearning_lunch_info)
-        mnist_classification_metriclearning_learner.fit()
-
+    learner = Learner(launch_info=get_launch_info())
+    learner.fit()
 
 main()

@@ -14,18 +14,28 @@ class ContrastiveLoss(nn.Module):
         super(ContrastiveLoss, self).__init__()
         self.margin = margin
         self.pair_selector = pair_selector
+        self.kpos = 1
+        self.kneg = 1
 
     def forward(self, embeddings, target):
         
         positive_pairs, negative_pairs = self.pair_selector.get_pairs(embeddings, target)
         positive_loss = F.pairwise_distance(embeddings[positive_pairs[:, 0]], embeddings[positive_pairs[:, 1]]).pow(2)
+
+        positive_loss = (F.relu(positive_loss - self.margin * self.kpos)).sum()
         
         negative_loss = F.relu(
-            self.margin - F.pairwise_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
-        ).pow(2)
-        loss = torch.cat([positive_loss, negative_loss], dim=0)
+            self.margin * self.kneg - F.pairwise_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
+        ).pow(2).sum()
         
-        return loss.sum(), len(positive_pairs) + len(negative_pairs)
+        return positive_loss, negative_loss
+
+    def step(self, gamma_pos=1, gamma_neg=1):
+        self.kpos *= gamma_pos
+        self.kneg /=gamma_neg
+
+    def get_margings(self):
+        return f'pos {self.margin * self.kpos}, neg {self.margin *self.kneg}'
 
 
 class LocalConstantLoss(nn.Module):

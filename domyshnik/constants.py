@@ -10,6 +10,7 @@ STEP_SIZE = 5
 WEIGHTS_PATH = '/mnt/data/molchanov/models'
 MODEL_POSTFIX = ''
 NUM_CLASSES = 10
+ADD_INFO = None
 
 SAVE_MODELS = True
 CURRENT_PARAMS = 'metric_learning_per_sampl'
@@ -26,7 +27,8 @@ class config_params:
                  negatives_cnt,
                  marging,
                  step_size,
-                 model_postfix):
+                 model_postfix,
+                 add_info=None):
         self.n_augments = n_augments
         self.lr = lr
         self.gamma = gamma
@@ -37,28 +39,30 @@ class config_params:
         self.marging = marging
         self.step_size = step_size
         self.model_postfix = model_postfix
+        self.add_info = add_info
+
 
 PARAMS = {
-    "metric_learning_per_class": config_params(n_augments=5,
+    "metric_learning_per_class": config_params(n_augments=20,
                                                lr=0.002,
                                                gamma=0.9025,
-                                               batch_size=128,
-                                               epochs=20,
+                                               batch_size=512,
+                                               epochs=15,
                                                sampling_strategy='HardNegativePair',
-                                               negatives_cnt=6,
-                                               marging=0.5,
-                                               step_size=5,
+                                               negatives_cnt=10,
+                                               marging=0.3,
+                                               step_size=3,
                                                model_postfix='mnist_per_class'),
 
-    "metric_learning_per_sampl": config_params(n_augments=15,
+    "metric_learning_per_sampl": config_params(n_augments=20,
                                                lr=0.002,
                                                gamma=0.9025,
-                                               batch_size=32,
-                                               epochs=30,
+                                               batch_size=512,
+                                               epochs=15,
                                                sampling_strategy='HardNegativePair',
-                                               negatives_cnt=3,
+                                               negatives_cnt=10,
                                                marging=0.5,
-                                               step_size=5,
+                                               step_size=3,
                                                model_postfix='mnist_per_sampl'),
 
     "classification_metric_learning_per_sampl": config_params(n_augments=1,
@@ -72,16 +76,49 @@ PARAMS = {
                                                              step_size=1,
                                                              model_postfix='mnist_per_sampl'),
 
-    "domyshnik": config_params(n_augments=15,
+    "domyshnik": config_params(n_augments=20,
                                lr=0.002,
                                gamma=0.9025,
-                               batch_size=512,
-                               epochs=20,
+                               batch_size=128,
+                               epochs=30,
                                sampling_strategy='HardNegativePair',
-                               negatives_cnt=6,
-                               marging=0.01,
-                               step_size=2,
-                               model_postfix='mnist'),                                                                                                            
+                               negatives_cnt=10,
+                               marging=0.5,
+                               step_size=5,
+                               model_postfix='mnist'),
+
+    "cifar10_metric_learning_per_class": config_params(n_augments=5,
+                                               lr=0.002,
+                                               gamma=0.9025,
+                                               batch_size=512,
+                                               epochs=30,
+                                               sampling_strategy='HardNegativePair',
+                                               negatives_cnt=10,
+                                               marging=0.3,
+                                               step_size=5,
+                                               model_postfix='cifar10_per_class'),
+
+    "cifar10_metric_learning_per_sampl": config_params(n_augments=20,
+                                               lr=0.002,
+                                               gamma=0.9025,
+                                               batch_size=128,
+                                               epochs=30,
+                                               sampling_strategy='HardNegativePair',
+                                               negatives_cnt=10,
+                                               marging=0.5,
+                                               step_size=5,
+                                               model_postfix='cifar10_per_sampl'),
+
+    "cifar10_domyshnik": config_params(n_augments=20,
+                               lr=0.002,
+                               gamma=0.9025,
+                               batch_size=128,
+                               epochs=30,
+                               sampling_strategy='HardNegativePair',
+                               negatives_cnt=10,
+                               marging=0.5,
+                               step_size=5,
+                               model_postfix='cifar10')                                                                                                            
 }
 
 cparams = PARAMS[CURRENT_PARAMS]
@@ -95,6 +132,7 @@ NEGATIVES_COUNT = cparams.negatives_cnt
 MARGING = cparams.marging
 STEP_SIZE = cparams.step_size
 MODEL_POSTFIX = cparams.model_postfix
+ADD_INFO = cparams.add_info
 
 print(f'model _params:\n\
         CURRENT_PARAMS {CURRENT_PARAMS}\n\
