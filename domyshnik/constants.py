@@ -77,6 +77,18 @@ PARAMS = {
                                                              model_postfix='mnist_per_sampl'),
 
     "domyshnik": config_params(n_augments=20,
+                               lr=0.0004,
+                               gamma=0.9025,
+                               batch_size=128,
+                               epochs=30,
+                               sampling_strategy='HardNegativePairKlDiv',
+                               negatives_cnt=10,
+                               marging=0.1,
+                               step_size=5,
+                               model_postfix='mnist',
+                               add_info={'refresh_reward_step': 40}),
+
+    "domyshnik_mnist_not_bad_params": config_params(n_augments=20,
                                lr=0.002,
                                gamma=0.9025,
                                batch_size=128,
@@ -85,7 +97,11 @@ PARAMS = {
                                negatives_cnt=10,
                                marging=0.1,
                                step_size=5,
-                               model_postfix='mnist'),
+                               model_postfix='mnist',
+                               add_info={'refresh_reward_step': 4,
+                                         'k_pos' : 0.25, 
+                                         'k_neg': 500, 
+                                         'k_reward': 5}),
 
     "cifar10_metric_learning_per_class": config_params(n_augments=5,
                                                lr=0.002,
@@ -146,4 +162,5 @@ print(f'model _params:\n\
         MARGING {MARGING}\n\
         STEP_SIZE {STEP_SIZE}\n\
         MODEL_POSTFIX {MODEL_POSTFIX}\n\
+        ADD_INFO {ADD_INFO}\n\
        ')

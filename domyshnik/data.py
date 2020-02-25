@@ -96,6 +96,7 @@ class MetrLearnDataset(torch.utils.data.Dataset):
         
     def __len__(self):
         return len(self.data)
+
     
     def __getitem__(self, idx):
         img, lbl = self.data[idx]

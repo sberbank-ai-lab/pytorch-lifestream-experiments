@@ -8,6 +8,7 @@ import numpy as np
 from domyshnik.utils import *
 from domyshnik.constants import *
 from dltranz.metric_learn.metric import metric_Recall_top_K
+import copy
 
 class Learner:
     
@@ -25,6 +26,9 @@ class Learner:
         self.mode = self.info.mode
         self.model_name = self.info.model_name
         self.add_info = self.info.add_info
+        self.copy_model = None
+        self.lamba = 1.0
+
         
     def train_epoch(self, step):
         self.model.train()
@@ -76,7 +80,17 @@ class Learner:
                                        "margings": margings})
 
                 elif self.mode == 'domyshnik':
+
                     labels, old_labels, rewards = labels[0], labels[1], labels[2]
+                    # refresh rewards according new strategy
+                    if self.copy_model is not None:
+                        x = device_data[0].view(-1, N_AUGMENTS + 1, device_data[0].size(-2), device_data[0].size(-1))[:, 0, :, :]
+                        out_copy = self.copy_model(x)
+                        labels = F.softmax(out_copy, dim=-1).argmax(dim=-1)
+                        rewards = rewards.masked_fill(labels == old_labels, -1.0)
+                    batch_res = (labels == old_labels).sum().float().item()/BATCH_SIZE
+
+
                     old_labels = old_labels.view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
                     rewards = rewards.view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
                     p0_labels = labels.view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
@@ -97,17 +111,14 @@ class Learner:
                     total += pred.size(0)
                     accuracy = corrects/total
 
-                    #loss = 100000000*loss_pos + 0*10000*loss_neg + 10000*reward
-                    alpha = -reward.item()/(loss_pos.item() + 0.0000001)
-                    betta = -reward.item()/(loss_neg.item() + 0.0000001)
+                    #k_pos, k_neg, k_reward = 0.25, 500, 5 domyshnik mnist not bad params
                     k_pos, k_neg, k_reward = 0.25, 500, 5
-                    loss = k_pos * loss_pos + k_neg * loss_neg + k_reward * reward
-                    #loss =  10*alpha * loss_pos + 20*betta * loss_neg + reward
+                    loss = (k_pos * loss_pos + k_neg * loss_neg) * self.lamba + k_reward * reward
 
                     steps.set_postfix({"loss_pos": loss_pos_val * k_pos,
                                        "loss neg": loss_neg_val * k_neg,
                                        "reward loss": reward_val * k_reward,
-                                       #"alpha=reward/pos_los": alpha,
+                                       "batch_res": batch_res,
                                        "accuracy": accuracy})
 
                 steps.set_description(f"train: epoch {step}, step {itr}/{len(self.train_loader)}")
@@ -203,6 +214,15 @@ class Learner:
             self.train_epoch(step + 1)
             self.test_epoch(step + 1)
             self.scheduler.step()
+
+            if self.add_info.get('refresh_reward_step', False):
+                refresh_reward_step = self.add_info['refresh_reward_step']
+                if step % refresh_reward_step == refresh_reward_step -1:
+                    self.copy_model = copy.deepcopy(self.model)
+                    self.copy_model.eval()
+                    #self.lamba *= 0.7
+                    print('refresh rewards')
+
         if SAVE_MODELS:
             save_model_params(self.model, self.model_name)
             
