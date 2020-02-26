@@ -114,7 +114,7 @@ class Cifar10MetricLearningNet(nn.Module):
     def forward(self, x):
         x = x.view(-1, 3, x.size(-2), x.size(-1)) # b, augs, 3, x, y -> b*augs, 3, x, y
         x = self.w(x)
-        x = self.norm(self.f(self.fc(x)))
+        x = self.norm(self.fc(self.f(x)))
         return x
 
 # --------------------------------------------------------------------------------------------------

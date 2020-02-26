@@ -13,7 +13,7 @@ NUM_CLASSES = 10
 ADD_INFO = None
 
 SAVE_MODELS = True
-CURRENT_PARAMS = 'domyshnik'
+CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
 
 class config_params:
 
@@ -93,7 +93,7 @@ PARAMS = {
                                gamma=0.9025,
                                batch_size=128,
                                epochs=90,
-                               sampling_strategy='HardNegativePair',
+                               sampling_strategy='HardNegativePairKlDiv',
                                negatives_cnt=10,
                                marging=0.1,
                                step_size=5,
@@ -117,7 +117,7 @@ PARAMS = {
     "cifar10_metric_learning_per_sampl": config_params(n_augments=20,
                                                lr=0.002,
                                                gamma=0.9025,
-                                               batch_size=128,
+                                               batch_size=256,
                                                epochs=30,
                                                sampling_strategy='HardNegativePair',
                                                negatives_cnt=10,
@@ -164,3 +164,5 @@ print(f'model _params:\n\
         MODEL_POSTFIX {MODEL_POSTFIX}\n\
         ADD_INFO {ADD_INFO}\n\
        ')
+if not SAVE_MODELS:
+    print('Attention: model will not be saved')

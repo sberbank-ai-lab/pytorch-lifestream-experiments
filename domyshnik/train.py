@@ -56,13 +56,13 @@ class Learner:
                                     "accuracy": '{:.5E}'.format(accuracy)})
 
                 elif self.mode == 'metric_learning': 
-                    if CURRENT_PARAMS == 'metric_learning_per_sampl':
+                    if CURRENT_PARAMS in ['metric_learning_per_sampl', 'cifar10_metric_learning_per_sampl']:
                         labels = torch.arange(int(out.size(0)/(N_AUGMENTS + 1))).view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
                         K = N_AUGMENTS
-                    elif CURRENT_PARAMS == 'metric_learning_per_class':
+                    elif CURRENT_PARAMS in ['metric_learning_per_class', 'cifar10_metric_learning_per_class']:
                         K = N_AUGMENTS * int(BATCH_SIZE/10)
                         labels = labels.view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
-
+                    
                     loss_pos, loss_neg = self.loss(out, labels)
                     losses_pos.append(loss_pos.item())
                     losses_neg.append(loss_neg.item())
@@ -152,10 +152,10 @@ class Learner:
                                         "accuracy": '{:.5E}'.format(accuracy)})
 
                     elif self.mode == 'metric_learning': 
-                        if CURRENT_PARAMS == 'metric_learning_per_sampl':
+                        if CURRENT_PARAMS in ['metric_learning_per_sampl', 'cifar10_metric_learning_per_sampl']:
                             labels = torch.arange(int(out.size(0)/(N_AUGMENTS + 1))).view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
                             K = N_AUGMENTS
-                        elif CURRENT_PARAMS == 'metric_learning_per_class':
+                        elif CURRENT_PARAMS in ['metric_learning_per_class', 'cifar10_metric_learning_per_class']:
                             K = N_AUGMENTS * int(BATCH_SIZE/10)
                             labels = labels.view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
 
@@ -215,7 +215,7 @@ class Learner:
             self.test_epoch(step + 1)
             self.scheduler.step()
 
-            if self.add_info.get('refresh_reward_step', False):
+            if self.add_info is not None and self.add_info.get('refresh_reward_step', False):
                 refresh_reward_step = self.add_info['refresh_reward_step']
                 if step % refresh_reward_step == refresh_reward_step -1:
                     self.copy_model = copy.deepcopy(self.model)
