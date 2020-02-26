@@ -59,21 +59,38 @@ def mnist_torch_augmentation(p=1):
         #transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False)
     ])
 
+
 def cifar_torch_augmentation(p=1):
     return torchvision.transforms.Compose([
-        transforms.RandomChoice([
-            transforms.RandomAffine(degrees=20, 
-                                translate=(0.25, 0.25), 
-                                scale=(0.8, 0.8), 
-                                shear=None, 
-                                resample=False, 
-                                fillcolor=0),
-            transforms.RandomPerspective(distortion_scale=0.5, p=0.5, interpolation=3)
-        ]),
-        transforms.ColorJitter(brightness=0.7, contrast=0.5, saturation=0.5, hue=0.1),
+                
+        transforms.RandomApply([
+            transforms.RandomChoice([
+                transforms.RandomAffine(degrees=45, 
+                                        translate=(0.2, 0.2), 
+                                        scale=(0.7, 1.3), 
+                                        shear=10, 
+                                        resample=False),
+                transforms.RandomResizedCrop(size=32, 
+                                             scale=(0.6, 1.5), 
+                                             ratio=(0.75, 1.3), 
+                                             interpolation=2)]
+            )], p=0.5
+        ),
+        
+        transforms.RandomApply([
+            transforms.ColorJitter(brightness=0.1, 
+                                   contrast=0.7, 
+                                   saturation=(0.5, 1), 
+                                   hue=0.2)], p=0.5
+        ),
+        
+        transforms.RandomApply([
+            transforms.RandomVerticalFlip(),
+            transforms.RandomHorizontalFlip()], p=0.5
+        ),
+        
         transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,)),
-        #transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False)
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
     ])
 
 # -------------------------------------------------------------------------------------------------
