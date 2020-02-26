@@ -123,7 +123,7 @@ class MetrLearnDataset(torch.utils.data.Dataset):
             return b_img, lbl
         else:
             new_lbl = random.randint(0, NUM_CLASSES - 1)
-            reward = -1.0 if lbl == new_lbl else -0.8
+            reward = -1.0 if lbl == new_lbl else BAD_REWARD
             return b_img, (new_lbl, lbl, reward)
         
     

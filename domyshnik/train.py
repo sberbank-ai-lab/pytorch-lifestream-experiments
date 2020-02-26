@@ -10,6 +10,74 @@ from domyshnik.constants import *
 from dltranz.metric_learn.metric import metric_Recall_top_K
 import copy
 
+'''
+
+'''
+class Critic:
+
+    '''
+    num_samples = len(train_loader)
+    entropy_update_treshold - we want update only when new strategy distribution - less uncertain in comprasion with old one
+    '''
+    def __init__(self, num_samples, device, entropy_update_treshold=None):
+        self.rewards = torch.zeros(num_samples, NUM_CLASSES).fill_(BAD_REWARD)
+        self.model = None
+        self.p0 = torch.zeros(num_samples, NUM_CLASSES).fill_(0.1)
+        self.device = device
+        self.entrp_tresh = entropy_update_treshold
+        if self.entrp_tresh is None:
+            e1 = self.entropy(torch.Tensor([1 / NUM_CLASSES] * NUM_CLASSES))
+            e2 = self.entropy(torch.Tensor([1 / (NUM_CLASSES-1)] * (NUM_CLASSES - 1)))
+            self.entrp_tresh = (e1 - e2)/2
+
+    def entropy(self, distrib):
+        d = -distrib*torch.log(distrib)
+        d[torch.isnan(d)] = 0
+        return d.sum(-1)
+
+    '''
+    correct_labels - good labels (used only for first p0 strategy)
+    contexts - batch from dataloader
+    idxs - indexes of concrete samples from dataloader
+    '''
+    def select_action(self, contexts, correct_labels, idxs):
+        
+        if self.model is None:
+
+            # p0 uncertainty strategy
+            new_lbls = torch.randint(0, NUM_CLASSES, (len(correct_labels),))
+            rewards = torch.zeros(len(correct_labels)).fill_(-0.8)
+            rewards[rewards == correct_labels] = -1.0
+
+            # fill reward matrix
+            self.rewards[idxs, new_lbls] = rewards 
+            return new_lbls, rewards
+        else:
+
+            probs = F.softmax(self.model(contexts), dim=-1)
+            new_lbls = probs.argmax(dim=-1)
+            
+            # update rewards according new strategy 
+            # (when action probability becomes less we decrease reward and wise verse)
+            p0_probs = self.p0[idxs]
+            dlt = F.kl_div(input=F.log_softmax(p0_probs, dim=-1),
+                           target=probs,
+                           reduction='none')
+
+            # for robastness - update when entropy becomes less (more stable strategy)
+            entrp0, entrp = self.entropy(p0_probs), self.entropy(probs)
+            entrp_mask = (entrp0 - entrp > self.entrp_tresh).int()
+
+            self.rewards[idxs] -= dlt*entrp_mask # minus is important because rewards are negatives
+            self.p0[idxs] = probs * entrp_mask + p0_probs * (1 - entrp_mask)
+
+            return new_lbls.to(self.device), correct_labels, self.rewards[idxs].to(self.device)
+
+    def update_strategy(self, model):
+        self.model = copy.deepcopy(self.model)
+        self.model.eval()
+
+
 class Learner:
     
     def __init__(self, launch_info):

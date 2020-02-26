@@ -11,6 +11,7 @@ WEIGHTS_PATH = '/mnt/data/molchanov/models'
 MODEL_POSTFIX = ''
 NUM_CLASSES = 10
 ADD_INFO = None
+BAD_REWARD = -0.8
 
 SAVE_MODELS = True
 CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
@@ -118,7 +119,7 @@ PARAMS = {
                                                lr=0.002,
                                                gamma=0.9025,
                                                batch_size=256,
-                                               epochs=30,
+                                               epochs=19,
                                                sampling_strategy='HardNegativePair',
                                                negatives_cnt=10,
                                                marging=0.5,
