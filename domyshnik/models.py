@@ -117,6 +117,21 @@ class Cifar10MetricLearningNet(nn.Module):
         x = self.norm(self.fc(self.f(x)))
         return x
 
+class Cifar10MetricLearningNet2(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.w = tvm.resnet50()
+        self.f = nn.ReLU()
+        self.fc = nn.Linear(1000, 256)
+        self.norm = L2Normalization()
+
+    def forward(self, x):
+        x = x.view(-1, 3, x.size(-2), x.size(-1)) # b, augs, 3, x, y -> b*augs, 3, x, y
+        x = self.w(x)
+        x = self.norm(self.fc(self.f(x)))
+        return x
+
 # --------------------------------------------------------------------------------------------------
 
 class MnistClassificationMetricLearningModel(nn.Module):
@@ -140,6 +155,26 @@ class MnistClassificationMetricLearningModel(nn.Module):
         output = F.log_softmax(x, dim=1)
         return output
 
+class Cifar10ClassificationMetricLearningModel(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.metric_learn_model = get_cifar10_metriclearning_persample_model()
+        self.metric_learn_model.train()
+        for param in self.metric_learn_model.parameters():
+            param.requires_grad = False
+
+        self.fc1 = nn.Linear(128, 10)
+
+    def forward(self, x):
+        if len(x.size()) == 5: # b, n_augs, c=3 , w, h
+            x = x[:, -1, :, :, :].unsqueeze(1) # get augmented image
+        else: # b, c=3 , w, h
+            x = x.unsqueeze(1)
+        x = self.metric_learn_model(x)
+        x = self.fc1(x)
+        output = F.log_softmax(x, dim=1)
+        return output
 
 # --------------------------------------------------------------------------------------------------
 
@@ -194,8 +229,37 @@ class MnistDomyshnikNetNet3(nn.Module):
         self.fc1 = nn.Linear(512, 10)
 
     def forward(self, x):
+        # ? maybe this is mistake because self,metric_learn_model do this again
         x = x.view(-1, 1, x.size(-2), x.size(-1)) # b, augs, x, y -> b*augs, 1, x, y
         x = x.repeat(1, 3, 1, 1)
+        x = self.metric_learn_model(x)
+        x = self.dropout_base(x)
+        x = F.relu(x)
+
+        x = self.fc0(x)
+        x = self.dropout0(x)
+        x = F.relu(x)
+
+        x = self.fc1(x)
+        x = F.log_softmax(x, dim=1)
+        return x
+
+class Cifar10DomyshnikNetNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.metric_learn_model = get_cifar10_metriclearning_persample_model()
+        self.metric_learn_model.train()
+        self.metric_learn_model = nn.Sequential(*list(self.metric_learn_model.children())[:-3])
+        for param in self.metric_learn_model.parameters():
+            param.requires_grad = False
+        self.dropout_base = nn.Dropout(0.25)
+
+        self.fc0 = nn.Linear(1000, 512)
+        self.dropout0 = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(512, 10)
+
+    def forward(self, x):
+        x = x.view(-1, 3, x.size(-2), x.size(-1)) # b, augs, 3, x, y -> b*augs, 3, x, y
         x = self.metric_learn_model(x)
         x = self.dropout_base(x)
         x = F.relu(x)
@@ -240,3 +304,7 @@ def get_mnist_metriclearning_model_cated():
 def get_mnist_domyshnik_model():
     model = MnistDomyshnikNetNet()
     return load_model_params(model, 'mnist_domushnik.w')
+
+def get_cifar10_metriclearning_persample_model():
+    model = Cifar10MetricLearningNet()
+    return load_model_params(model, 'cifar10_metric_learning.w', 'cifar10_per_sampl')

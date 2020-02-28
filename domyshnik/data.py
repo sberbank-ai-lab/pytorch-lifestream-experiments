@@ -65,13 +65,13 @@ def cifar_torch_augmentation(p=1):
                 
         transforms.RandomApply([
             transforms.RandomChoice([
-                transforms.RandomAffine(degrees=45, 
-                                        translate=(0.2, 0.2), 
+                transforms.RandomAffine(degrees=15,#45, 
+                                        translate=(0.1, 0.1),#(0.2, 0.2), 
                                         scale=(0.7, 1.3), 
-                                        shear=10, 
+                                        shear=None,#10, 
                                         resample=False),
                 transforms.RandomResizedCrop(size=32, 
-                                             scale=(0.6, 1.5), 
+                                             scale=(0.8, 1.2),#(0.6, 1.5), 
                                              ratio=(0.75, 1.3), 
                                              interpolation=2)]
             )], p=0.5
@@ -79,9 +79,9 @@ def cifar_torch_augmentation(p=1):
         
         transforms.RandomApply([
             transforms.ColorJitter(brightness=0.1, 
-                                   contrast=0.7, 
-                                   saturation=(0.5, 1), 
-                                   hue=0.2)], p=0.5
+                                   contrast=0.1,#0.7, 
+                                   saturation=(0.0, 0.5),#(0.5, 1), 
+                                   hue=0.1)], p=0.5
         ),
         
         transforms.RandomApply([
@@ -92,6 +92,9 @@ def cifar_torch_augmentation(p=1):
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
     ])
+
+def cifar10_normilise(img):
+    return transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))(img) 
 
 # -------------------------------------------------------------------------------------------------
 class MetrLearnDataset(torch.utils.data.Dataset):
@@ -117,12 +120,18 @@ class MetrLearnDataset(torch.utils.data.Dataset):
     
     def __getitem__(self, idx):
         img, lbl = self.data[idx]
-        imgs = [transforms.ToTensor()(img)] + [self.aug(img) for i in range(self.n_augments)]
+        #imgs = [cifar10_normilise(transforms.ToTensor()(img))] + [self.aug(img) for i in range(self.n_augments)]
+        imgs = [self.aug(img) for i in range(self.n_augments + 1)]
         b_img = torch.stack(imgs).squeeze()
         if not self.augment_labels:
             return b_img, lbl
         else:
-            new_lbl = random.randint(0, NUM_CLASSES - 1)
+            if random.random() > ERROR_RATE:
+                new_lbl = random.randint(0, NUM_CLASSES - 1)
+                while new_lbl == lbl:
+                    new_lbl = random.randint(0, NUM_CLASSES - 1)
+            else:
+                new_lbl = lbl
             reward = -1.0 if lbl == new_lbl else BAD_REWARD
             return b_img, (new_lbl, lbl, reward)
         

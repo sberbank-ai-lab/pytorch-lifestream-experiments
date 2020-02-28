@@ -116,12 +116,12 @@ class Learner:
                     loss_val = self.running_average(losses)                    
 
                     pred = F.softmax(out, dim=-1).argmax(dim=-1)
-                    corrects += pred.eq(old_labels.view_as(pred)).sum().item()
+                    corrects += pred.eq(labels.view_as(pred)).sum().item()
                     total += pred.size(0)
                     accuracy = corrects/total
 
-                    steps.set_postfix({"loss": '{:.5E}'.format(loss_val),
-                                    "accuracy": '{:.5E}'.format(accuracy)})
+                    steps.set_postfix({"loss": loss_val,
+                                       "accuracy": accuracy})
 
                 elif self.mode == 'metric_learning': 
                     if CURRENT_PARAMS in ['metric_learning_per_sampl', 'cifar10_metric_learning_per_sampl']:
@@ -137,15 +137,18 @@ class Learner:
                     loss_pos_val = self.running_average(losses_pos)
                     loss_neg_val = self.running_average(losses_neg)
 
-                    loss = loss_pos + 10 * loss_neg
+                    k_pos, k_neg = self.add_info['k_pos'], self.add_info['k_neg']
+
+                    loss = k_pos * loss_pos + k_neg * loss_neg
 
                     total_recall += metric_Recall_top_K(out, labels, K)
 
                     margings = self.loss.get_margings()
-                    steps.set_postfix({"loss_pos": loss_pos_val,
-                                       "loss neg": loss_neg_val,
+                    steps.set_postfix({"loss_pos": loss_pos_val * k_pos,
+                                       "loss neg": loss_neg_val * k_neg,
                                        "recall": total_recall/(itr + 1),
-                                       "margings": margings})
+                                       #"margings": margings
+                                       })
 
                 elif self.mode == 'domyshnik':
 
@@ -179,20 +182,27 @@ class Learner:
                     total += pred.size(0)
                     accuracy = corrects/total
 
-                    #k_pos, k_neg, k_reward = 0.25, 500, 5 domyshnik mnist not bad params
-                    k_pos, k_neg, k_reward = 0.25, 500, 5
+                    k_pos, k_neg, k_reward = self.add_info['k_pos'], self.add_info['k_neg'], self.add_info['k_reward']
+
                     loss = (k_pos * loss_pos + k_neg * loss_neg) * self.lamba + k_reward * reward
+
 
                     steps.set_postfix({"loss_pos": loss_pos_val * k_pos,
                                        "loss neg": loss_neg_val * k_neg,
                                        "reward loss": reward_val * k_reward,
-                                       "batch_res": batch_res,
+                                       #"batch_res": batch_res,
+                                       "k": f'{k_pos}, {k_neg}, {k_reward}',
                                        "accuracy": accuracy})
 
                 steps.set_description(f"train: epoch {step}, step {itr}/{len(self.train_loader)}")
                 loss.backward()
                 self.optimizer.step()
                 steps.update()
+
+            if self.mode == 'domyshnik' and self.add_info.get('factor', -1) != -1:
+                self.add_info['k_pos'] /= self.add_info['factor']
+                self.add_info['k_neg'] /= self.add_info['factor']
+                self.add_info['k_reward'] *= self.add_info['factor']
         
     def test_epoch(self, step):
         self.model.eval()
@@ -212,12 +222,12 @@ class Learner:
                         loss_val = self.running_average(losses)
 
                         pred = F.softmax(out, dim=-1).argmax(dim=-1)
-                        corrects += pred.eq(old_labels.view_as(pred)).sum().item()
+                        corrects += pred.eq(labels.view_as(pred)).sum().item()
                         total += pred.size(0)
                         accuracy = corrects/total
 
-                        steps.set_postfix({"loss": '{:.5E}'.format(loss_val),
-                                        "accuracy": '{:.5E}'.format(accuracy)})
+                        steps.set_postfix({"loss": loss_val,
+                                           "accuracy": accuracy})
 
                     elif self.mode == 'metric_learning': 
                         if CURRENT_PARAMS in ['metric_learning_per_sampl', 'cifar10_metric_learning_per_sampl']:
@@ -267,14 +277,15 @@ class Learner:
 
                         loss = loss_pos + loss_neg + reward
 
-                        steps.set_postfix({"local loss pos": '{:.5E}'.format(loss_pos_val),
-                                        "local loss neg": '{:.5E}'.format(loss_neg_val),
-                                        "reward loss": '{:.5E}'.format(reward_val),
+                        steps.set_postfix({
+                                        #"local loss pos": '{:.5E}'.format(loss_pos_val),
+                                        #"local loss neg": '{:.5E}'.format(loss_neg_val),
+                                        #"reward loss": '{:.5E}'.format(reward_val),
                                         "accuracy": '{:.5E}'.format(accuracy)})
 
-                    steps.set_description(f"test: epoch {step}, step {itr}/{len(self.train_loader)}")
+                    steps.set_description(f"test: epoch {step}, step {itr}/{len(self.test_loader)}")
                     steps.update()
-                self.loss.step()
+                #self.loss.step()
                 #self.loss.step(gamma_pos=0.85, gamma_neg=0.978)
         
     def fit(self):

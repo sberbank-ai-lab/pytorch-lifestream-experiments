@@ -118,11 +118,13 @@ class LaunchInfo:
             
         self.train_loader = train_loader
         self.test_loader = test_loader
+
+        self.device = torch.device(device)
         
-        if device == 'cuda':
+        '''if device == 'cuda':
             self.device = torch.device('cuda')
         else:
-            self.device = torch.device('cpu')
+            self.device = torch.device('cpu')'''
             
         self.model.to(device)
         self.loss.to(device)
@@ -140,7 +142,7 @@ def get_launch_info():
                                                     test_loader=get_mnist_test_loader(batch_size=BATCH_SIZE, 
                                                                                     n_augments=N_AUGMENTS), 
                                                     epochs=EPOCHS, 
-                                                    device='cuda',
+                                                    device=DEVICE,
                                                     mode='classification',
                                                     model_name='mnist_classification.w',
                                                     add_info=ADD_INFO)
@@ -156,11 +158,27 @@ def get_launch_info():
                                                                     test_loader=get_mnist_test_loader(batch_size=BATCH_SIZE, 
                                                                                                     n_augments=0), 
                                                                     epochs=EPOCHS, 
-                                                                    device='cuda',
+                                                                    device=DEVICE,
                                                                     mode='classification',
                                                                     model_name='mnist_classification_metriclearning.w',
                                                                     add_info=ADD_INFO)
-        return mnist_classification_metriclearning_lunch_info   
+        return mnist_classification_metriclearning_lunch_info  
+
+    elif CURRENT_PARAMS == 'cifar10_classification_metric_learning_per_sampl': 
+        mnist_classification_metriclearning_lunch_info = LaunchInfo(model=Cifar10ClassificationMetricLearningModel(), 
+                                                                    loss=torch.nn.NLLLoss(), 
+                                                                    optimizer=None, 
+                                                                    scheduler=None, 
+                                                                    train_loader=get_cifar10_train_loader(batch_size=BATCH_SIZE, 
+                                                                                                          n_augments=N_AUGMENTS), 
+                                                                    test_loader=get_cifar10_test_loader(batch_size=BATCH_SIZE, 
+                                                                                                        n_augments=0),  
+                                                                    epochs=EPOCHS, 
+                                                                    device=DEVICE,
+                                                                    mode='classification',
+                                                                    model_name='cifar10_classification_metriclearning.w',
+                                                                    add_info=ADD_INFO)
+        return mnist_classification_metriclearning_lunch_info 
 
     elif CURRENT_PARAMS in ['metric_learning_per_sampl', 'metric_learning_per_class']:                                         
         mnist_metriclearning_lunch_info = LaunchInfo(model=MnistMetricLearningNet3(), 
@@ -173,14 +191,14 @@ def get_launch_info():
                                                     test_loader=get_mnist_test_loader(batch_size=BATCH_SIZE, 
                                                                                     n_augments=N_AUGMENTS), 
                                                     epochs=EPOCHS, 
-                                                    device='cuda',
+                                                    device=DEVICE,
                                                     mode='metric_learning',
                                                     model_name='mnist_metric_learning.w',
                                                     add_info=ADD_INFO)
         return mnist_metriclearning_lunch_info
 
     elif CURRENT_PARAMS in ['cifar10_metric_learning_per_sampl', 'cifar10_metric_learning_per_class']:                                         
-        cifar10_metriclearning_lunch_info = LaunchInfo(model=Cifar10MetricLearningNet(), 
+        cifar10_metriclearning_lunch_info = LaunchInfo(model=Cifar10MetricLearningNet2(), 
                                                     loss=ContrastiveLoss(margin=MARGING, 
                                                                         pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
                                                     optimizer=None, 
@@ -190,7 +208,7 @@ def get_launch_info():
                                                     test_loader=get_cifar10_test_loader(batch_size=BATCH_SIZE, 
                                                                                     n_augments=N_AUGMENTS), 
                                                     epochs=EPOCHS, 
-                                                    device='cuda',
+                                                    device=DEVICE,
                                                     mode='metric_learning',
                                                     model_name='cifar10_metric_learning.w',
                                                     add_info=ADD_INFO)
@@ -209,7 +227,7 @@ def get_launch_info():
                                                                                     n_augments=N_AUGMENTS,
                                                                                     augment_labels=True), 
                                                     epochs=EPOCHS, 
-                                                    device='cuda',
+                                                    device=DEVICE,
                                                     mode='domyshnik',
                                                     model_name='mnist_domushnik.w',
                                                     add_info=ADD_INFO)
@@ -217,7 +235,7 @@ def get_launch_info():
         return mnist_domyshnik_lunch_info   
 
     elif CURRENT_PARAMS == 'cifar10_domyshnik':
-        cifar10_domyshnik_lunch_info = LaunchInfo(model=MnistDomyshnikNetNet3(), 
+        cifar10_domyshnik_lunch_info = LaunchInfo(model=Cifar10DomyshnikNetNet(), 
                                                     loss=ContrastiveLoss(margin=MARGING, 
                                                                          pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
                                                     optimizer=None, 
@@ -229,7 +247,7 @@ def get_launch_info():
                                                                                     n_augments=N_AUGMENTS,
                                                                                     augment_labels=True), 
                                                     epochs=EPOCHS, 
-                                                    device='cuda',
+                                                    device=DEVICE,
                                                     mode='domyshnik',
                                                     model_name='cifar10_domushnik.w',
                                                     add_info=ADD_INFO)
