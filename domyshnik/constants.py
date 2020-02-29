@@ -16,7 +16,9 @@ DEVICE = 'cuda'
 ERROR_RATE = 0.5
 
 SAVE_MODELS = True
-CURRENT_PARAMS = 'cifar10_classification_metric_learning_per_sampl'
+#CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
+#CURRENT_PARAMS = 'cifar10_classification_metric_learning_per_sampl'
+CURRENT_PARAMS = 'cifar10_domyshnik'
 
 class config_params:
 
@@ -133,8 +135,12 @@ PARAMS = {
                                                step_size=5,
                                                model_postfix='cifar10_per_sampl_2',
                                                device='cuda:2',
-                                               add_info={'k_pos' : 1, 
-                                                         'k_neg': 10}
+                                               add_info={'k_pos' : 10,#1, 
+                                                         'k_neg': 10,
+                                                         'use_clusterisation_loss': True,
+                                                         'k_clust_neg': 70,
+                                                         'k_clust_pos': 10#1
+                                                         }
                                                          ),
 
     "cifar10_classification_metric_learning_per_sampl": config_params(n_augments=1,

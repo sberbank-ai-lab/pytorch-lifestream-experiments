@@ -164,7 +164,7 @@ class Cifar10ClassificationMetricLearningModel(nn.Module):
         for param in self.metric_learn_model.parameters():
             param.requires_grad = False
 
-        self.fc1 = nn.Linear(128, 10)
+        self.fc1 = nn.Linear(256, 10)
 
     def forward(self, x):
         if len(x.size()) == 5: # b, n_augs, c=3 , w, h
@@ -306,5 +306,5 @@ def get_mnist_domyshnik_model():
     return load_model_params(model, 'mnist_domushnik.w')
 
 def get_cifar10_metriclearning_persample_model():
-    model = Cifar10MetricLearningNet()
-    return load_model_params(model, 'cifar10_metric_learning.w', 'cifar10_per_sampl')
+    model = Cifar10MetricLearningNet2()
+    return load_model_params(model, 'cifar10_metric_learning.w', 'cifar10_per_sampl_2')

@@ -96,6 +96,13 @@ class Learner:
         self.add_info = self.info.add_info
         self.copy_model = None
         self.lamba = 1.0
+        self.best_accuracy = 0
+        if self.add_info is not None and self.add_info.get('use_clusterisation_loss', False):
+            self.clust_loss = ClusterisationLoss(margin=MARGING, 
+                                                 input_dim=256, 
+                                                 num_classes=NUM_CLASSES, 
+                                                 device=self.device)
+            self.clust_loss.to(self.device)
 
         
     def train_epoch(self, step):
@@ -103,6 +110,7 @@ class Learner:
         losses, rewrds = [], []
         losses_pos, losses_neg = [], []
         total_recall, total, corrects = 0, 0, 0
+        clust_neg_losses, clust_pos_losses = [], []
         with tqdm.tqdm(total=len(self.train_loader)) as steps:
             for itr, data in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
@@ -137,15 +145,33 @@ class Learner:
                     loss_pos_val = self.running_average(losses_pos)
                     loss_neg_val = self.running_average(losses_neg)
 
+                    c_loss, c_pos_val, c_neg_val = 0, 0, 0
+                    if self.clust_loss is not None and step > 0:
+
+                        x = out.view(out.size(0), -1, out.size(-1))[:, 0, :]
+                        c_pos, c_neg = self.clust_loss(x)
+
+                        c_pos *= self.add_info['k_clust_pos']
+                        clust_pos_losses.append(c_pos.item())
+                        c_pos_val = self.running_average(clust_pos_losses)
+
+                        c_neg *= self.add_info['k_clust_neg']
+                        clust_neg_losses.append(c_neg.item())
+                        c_neg_val = self.running_average(clust_neg_losses)
+                        
+                        c_loss = c_pos + c_neg
+
                     k_pos, k_neg = self.add_info['k_pos'], self.add_info['k_neg']
 
-                    loss = k_pos * loss_pos + k_neg * loss_neg
+                    loss = k_pos * loss_pos + k_neg * loss_neg + c_loss
 
                     total_recall += metric_Recall_top_K(out, labels, K)
 
                     margings = self.loss.get_margings()
                     steps.set_postfix({"loss_pos": loss_pos_val * k_pos,
                                        "loss neg": loss_neg_val * k_neg,
+                                       "clust pos loss": c_pos_val,
+                                       "clust neg loss": c_neg_val,
                                        "recall": total_recall/(itr + 1),
                                        #"margings": margings
                                        })
@@ -191,7 +217,7 @@ class Learner:
                                        "loss neg": loss_neg_val * k_neg,
                                        "reward loss": reward_val * k_reward,
                                        #"batch_res": batch_res,
-                                       "k": f'{k_pos}, {k_neg}, {k_reward}',
+                                       #"k": f'{k_pos}, {k_neg}, {k_reward}',
                                        "accuracy": accuracy})
 
                 steps.set_description(f"train: epoch {step}, step {itr}/{len(self.train_loader)}")
@@ -209,6 +235,7 @@ class Learner:
         losses, rewrds = [], []
         losses_pos, losses_neg = [], []
         total_recall, total, corrects = 0, 0, 0
+        acc = 0
         with torch.no_grad():
             with tqdm.tqdm(total=len(self.test_loader)) as steps:
                 for itr, data in enumerate(self.test_loader):
@@ -225,6 +252,7 @@ class Learner:
                         corrects += pred.eq(labels.view_as(pred)).sum().item()
                         total += pred.size(0)
                         accuracy = corrects/total
+                        acc = accuracy
 
                         steps.set_postfix({"loss": loss_val,
                                            "accuracy": accuracy})
@@ -246,12 +274,12 @@ class Learner:
                         loss = loss_pos + loss_neg
 
                         total_recall += metric_Recall_top_K(out, labels, K)
+                        acc = total_recall / (itr + 1)
 
                         margings = self.loss.get_margings()
                         steps.set_postfix({"loss_pos": loss_pos_val,
                                         "loss neg": loss_neg_val,
-                                        "recall": total_recall/(itr + 1),
-                                        "margings": margings})
+                                        "recall": total_recall/(itr + 1)})
 
                     elif self.mode == 'domyshnik':
                         labels, old_labels, rewards = labels[0], labels[1], labels[2]
@@ -274,6 +302,7 @@ class Learner:
                         corrects += pred.eq(old_labels.view_as(pred)).sum().item()
                         total += pred.size(0)
                         accuracy = corrects/total
+                        acc = accuracy
 
                         loss = loss_pos + loss_neg + reward
 
@@ -287,6 +316,11 @@ class Learner:
                     steps.update()
                 #self.loss.step()
                 #self.loss.step(gamma_pos=0.85, gamma_neg=0.978)
+                if self.best_accuracy < acc:
+                    self.best_accuracy = acc
+                    if SAVE_MODELS:
+                        save_model_params(self.model, self.model_name)
+
         
     def fit(self):
         for step in range(self.epochs):
@@ -302,8 +336,8 @@ class Learner:
                     #self.lamba *= 0.7
                     print('refresh rewards')
 
-        if SAVE_MODELS:
-            save_model_params(self.model, self.model_name)
+        #if SAVE_MODELS:
+        #    save_model_params(self.model, self.model_name)
             
     def data_to_device(self, data):
         if self.mode != 'domyshnik':
