@@ -124,18 +124,18 @@ PARAMS = {
                                                step_size=5,
                                                model_postfix='cifar10_per_class'),
 
-    "cifar10_metric_learning_per_sampl": config_params(n_augments=10,
+    "cifar10_metric_learning_per_sampl": config_params(n_augments=5,
                                                lr=0.002,
                                                gamma=0.9025,
-                                               batch_size=256,
+                                               batch_size=800,
                                                epochs=30,
                                                sampling_strategy='HardNegativePair',
-                                               negatives_cnt=10,
+                                               negatives_cnt=5,
                                                marging=0.5,
                                                step_size=5,
                                                model_postfix='cifar10_per_sampl_2',
                                                device='cuda:2',
-                                               add_info={'k_pos' : 10,#1, 
+                                               add_info={'k_pos' : 1, 
                                                          'k_neg': 10,
                                                          'use_clusterisation_loss': True,
                                                          'k_clust_neg': 70,
@@ -158,17 +158,17 @@ PARAMS = {
                                lr=0.0004,
                                gamma=0.9025,
                                batch_size=128,
-                               epochs=90,
+                               epochs=150,
                                sampling_strategy='HardNegativePairKlDiv',
                                negatives_cnt=10,
                                marging=0.1,
                                step_size=5,
                                model_postfix='cifar10_domyshnik',
-                               add_info={'refresh_reward_step': 40,
+                               add_info={'refresh_reward_step': 400,
                                          'k_pos' : 0.25*0.3, 
                                          'k_neg': 200*0.3, 
                                          'k_reward': 15,
-                                         'factor': 1.5})                                                                                                            
+                                         'factor': 1})                                                                                                            
 }
 
 cparams = PARAMS[CURRENT_PARAMS]

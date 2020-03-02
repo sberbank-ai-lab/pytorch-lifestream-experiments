@@ -272,6 +272,10 @@ class Cifar10DomyshnikNetNet(nn.Module):
         x = F.log_softmax(x, dim=1)
         return x
 
+    def allow_grads(self):
+        for param in self.metric_learn_model.parameters():
+            param.requires_grad = True
+
 # --------------------------------------------------------------------------------------------------
 
 def save_model_params(model, model_name):

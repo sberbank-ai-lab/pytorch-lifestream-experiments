@@ -146,7 +146,7 @@ class Learner:
                     loss_neg_val = self.running_average(losses_neg)
 
                     c_loss, c_pos_val, c_neg_val = 0, 0, 0
-                    if self.clust_loss is not None and step > 0:
+                    if self.clust_loss is not None and step > 4:
 
                         x = out.view(out.size(0), -1, out.size(-1))[:, 0, :]
                         c_pos, c_neg = self.clust_loss(x)
@@ -229,6 +229,8 @@ class Learner:
                 self.add_info['k_pos'] /= self.add_info['factor']
                 self.add_info['k_neg'] /= self.add_info['factor']
                 self.add_info['k_reward'] *= self.add_info['factor']
+                if step > 1:
+                    self.model.allow_grads()
         
     def test_epoch(self, step):
         self.model.eval()
