@@ -78,6 +78,31 @@ class Critic:
         self.model.eval()
 
 
+class AverageLoss:
+
+    def __init__(self, window=1000):
+        self.history = []
+        self.window = window
+
+    def update(self, new_val):
+        self.history.append(new_val)
+        arr = np.array(self.history)[-self.window:]
+        res = np.convolve(arr, np.ones((arr.shape[0],)))/arr.shape[0]
+        return res[0]
+
+
+class MetricCalculator:
+
+    def __init__(self):
+        self.metrics = {}   
+
+    def update(self, metric_name, new_val):
+        if metric_name not in self.metrics:
+            self.metrics[metric_name] = AverageLoss()
+
+        return self.metrics[metric_name].update(new_val)
+
+
 class Learner:
     
     def __init__(self, launch_info):
@@ -97,11 +122,13 @@ class Learner:
         self.copy_model = None
         self.lamba = 1.0
         self.best_accuracy = 0
+        self.clust_loss = None
         if self.add_info is not None and self.add_info.get('use_clusterisation_loss', False):
-            self.clust_loss = ClusterisationLoss(margin=MARGING, 
+            '''self.clust_loss = ClusterisationLoss(margin=MARGING, 
                                                  input_dim=256, 
                                                  num_classes=NUM_CLASSES, 
-                                                 device=self.device)
+                                                 device=self.device)'''
+            self.clust_loss = ClusterisationLoss2(device=self.device)
             self.clust_loss.to(self.device)
 
         
@@ -146,7 +173,7 @@ class Learner:
                     loss_neg_val = self.running_average(losses_neg)
 
                     c_loss, c_pos_val, c_neg_val = 0, 0, 0
-                    if self.clust_loss is not None and step > 4:
+                    if self.clust_loss is not None and step > 0:
 
                         x = out.view(out.size(0), -1, out.size(-1))[:, 0, :]
                         c_pos, c_neg = self.clust_loss(x)

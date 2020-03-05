@@ -165,7 +165,7 @@ def get_launch_info():
         return mnist_classification_metriclearning_lunch_info  
 
     elif CURRENT_PARAMS == 'cifar10_classification_metric_learning_per_sampl': 
-        mnist_classification_metriclearning_lunch_info = LaunchInfo(model=Cifar10ClassificationMetricLearningModel(), 
+        mnist_classification_metriclearning_lunch_info = LaunchInfo(model=Cifar10ClassificationMetricLearningModel2(), 
                                                                     loss=torch.nn.NLLLoss(), 
                                                                     optimizer=None, 
                                                                     scheduler=None, 
@@ -198,7 +198,7 @@ def get_launch_info():
         return mnist_metriclearning_lunch_info
 
     elif CURRENT_PARAMS in ['cifar10_metric_learning_per_sampl', 'cifar10_metric_learning_per_class']:                                         
-        cifar10_metriclearning_lunch_info = LaunchInfo(model=Cifar10MetricLearningNet2(), 
+        cifar10_metriclearning_lunch_info = LaunchInfo(model=Cifar10MetricLearningNet3(), 
                                                     loss=ContrastiveLoss(margin=MARGING, 
                                                                         pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
                                                     optimizer=None, 

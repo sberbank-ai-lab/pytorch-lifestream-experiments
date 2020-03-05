@@ -16,9 +16,9 @@ DEVICE = 'cuda'
 ERROR_RATE = 0.5
 
 SAVE_MODELS = True
-#CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
+CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
 #CURRENT_PARAMS = 'cifar10_classification_metric_learning_per_sampl'
-CURRENT_PARAMS = 'cifar10_domyshnik'
+#CURRENT_PARAMS = 'cifar10_domyshnik'
 
 class config_params:
 
@@ -128,23 +128,23 @@ PARAMS = {
                                                lr=0.002,
                                                gamma=0.9025,
                                                batch_size=800,
-                                               epochs=30,
+                                               epochs=250,
                                                sampling_strategy='HardNegativePair',
                                                negatives_cnt=5,
                                                marging=0.5,
                                                step_size=5,
-                                               model_postfix='cifar10_per_sampl_2',
+                                               model_postfix='cifar10_per_sampl_hinton_150_centroids',
                                                device='cuda:2',
                                                add_info={'k_pos' : 1, 
                                                          'k_neg': 10,
                                                          'use_clusterisation_loss': True,
                                                          'k_clust_neg': 70,
-                                                         'k_clust_pos': 10#1
+                                                         'k_clust_pos': 10000#1
                                                          }
                                                          ),
 
     "cifar10_classification_metric_learning_per_sampl": config_params(n_augments=1,
-                                                                    lr=0.002,
+                                                                    lr=0.0004,#0.002,
                                                                     gamma=0.9025,
                                                                     batch_size=128,
                                                                     epochs=20,

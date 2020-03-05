@@ -132,6 +132,32 @@ class Cifar10MetricLearningNet2(nn.Module):
         x = self.norm(self.fc(self.f(x)))
         return x
 
+class Cifar10MetricLearningNet3(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.w = tvm.resnet50()
+
+        self.head = nn.Sequential(*[
+            #nn.Dropout(p=0.5),
+            nn.Linear(1000, 512),
+            nn.ReLU(),
+
+            #nn.Dropout(p=0.7),
+            nn.Linear(512, 256),
+
+            L2Normalization()
+        ])
+
+
+    def forward(self, x):
+        x = x.view(-1, 3, x.size(-2), x.size(-1)) # b, augs, 3, x, y -> b*augs, 3, x, y
+        x = self.w(x)
+
+        x = self.head(x)
+
+        return x
+
 # --------------------------------------------------------------------------------------------------
 
 class MnistClassificationMetricLearningModel(nn.Module):
@@ -164,6 +190,29 @@ class Cifar10ClassificationMetricLearningModel(nn.Module):
         for param in self.metric_learn_model.parameters():
             param.requires_grad = False
 
+        self.fc1 = nn.Linear(256, 10)
+
+    def forward(self, x):
+        if len(x.size()) == 5: # b, n_augs, c=3 , w, h
+            x = x[:, -1, :, :, :].unsqueeze(1) # get augmented image
+        else: # b, c=3 , w, h
+            x = x.unsqueeze(1)
+        x = self.metric_learn_model(x)
+        x = self.fc1(x)
+        output = F.log_softmax(x, dim=1)
+        return output
+
+class Cifar10ClassificationMetricLearningModel2(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.metric_learn_model = get_cifar10_metriclearning_persample_model_cated()
+        #self.metric_learn_model = nn.Sequential(*list(self.metric_learn_model.children())[:-1])
+        self.metric_learn_model.train()
+        for param in self.metric_learn_model.parameters():
+            param.requires_grad = False
+
+        #self.fc1 = nn.Linear(1000, 10)
         self.fc1 = nn.Linear(256, 10)
 
     def forward(self, x):
@@ -312,3 +361,7 @@ def get_mnist_domyshnik_model():
 def get_cifar10_metriclearning_persample_model():
     model = Cifar10MetricLearningNet2()
     return load_model_params(model, 'cifar10_metric_learning.w', 'cifar10_per_sampl_2')
+
+def get_cifar10_metriclearning_persample_model_cated():
+    model = Cifar10MetricLearningNet3()
+    return load_model_params(model, 'cifar10_metric_learning.w', 'cifar10_per_sampl_hinton_150_centroids')

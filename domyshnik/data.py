@@ -183,3 +183,15 @@ def get_cifar10_test_loader(batch_size, n_augments=4, augment_labels=False):
                                               shuffle=False,
                                               num_workers=5)
     return test_data_loader
+
+def get_cifar10_test_loader_without_augmentation(batch_size=1):
+    data_test = MetrLearnDataset(dataset=cifar10_test_dataset(), 
+                            augmenter=transforms.ToTensor(), 
+                            n_augments=0,
+                            augment_labels=False)
+        
+    test_data_loader = torch.utils.data.DataLoader(data_test,
+                                              batch_size=batch_size,
+                                              shuffle=False,
+                                              num_workers=5)
+    return test_data_loader

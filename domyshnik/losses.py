@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dltranz.metric_learn.sampling_strategies import HardNegativePairSelector
 torch.autograd.set_detect_anomaly(True)
+from dltranz.metric_learn.ml_models import L2Normalization
 
 class ContrastiveLoss(nn.Module):
     """
@@ -141,3 +142,38 @@ class ClusterisationLoss(nn.Module):
         positive_loss = D1.sum()/D1.size(0)
         
         return positive_loss, negative_loss
+
+
+class ClusterisationLoss2(nn.Module):
+
+    def __init__(self, device):
+        super(ClusterisationLoss2, self).__init__()
+        self.norm = L2Normalization()
+        self.device = device
+        self.centroids = nn.Parameter(torch.randn(10, 256))
+
+    # embeddings: Nxd, centroids: Kxd
+    def forward(self, embeddings):
+        N, K = embeddings.size(0), self.centroids.size(0)
+
+        centers = self.centroids
+        centers = self.norm(centers)
+                
+        # distances to each centroid (cosine)
+        D = torch.matmul(centers, embeddings.transpose(0, 1)) # KxN
+
+        # mask
+        centr_idx = torch.argmin(D, dim=0).detach()
+        centr_mask = (centr_idx.repeat(K).view(K, -1) == torch.arange(K).view(-1, 1).repeat(1, N).to(self.device)).int() # KxN
+        weights = centr_mask.sum(-1) + 1
+
+        Dmasked = D * centr_mask
+
+        # in cluster distance
+        in_cluster_dist = -1 * torch.div(Dmasked.sum(-1), weights).sum()/K # -1 - because cosine distance
+
+        # between cluster dist
+        Dc = torch.matmul(centers, centers.transpose(0, 1)) # KxK
+        between_cluster_dist = Dc.sum()/(K*K) # max - because cosine distance
+
+        return in_cluster_dist, between_cluster_dist
