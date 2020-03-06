@@ -100,13 +100,16 @@ def read_consumer_data(path, conf):
         data = pickle.load(f)
     logger.info(f'Loaded raw data: {len(data)}')
 
-    data = [rec for rec in data if rec['target'] is not None]
-    logger.info(f'Loaded data with target: {len(data)}')
+    train_data = [rec for rec in data if rec['target'] is not None]
+    test_data = [rec for rec in data if rec['target'] is None]
+    logger.info(f'Loaded data with target: {len(train_data)}')
+    logger.info(f'Loaded data without target: {len(test_data)}')
 
-    data = list(prepare_embeddings(data, conf))
+    train_data = list(prepare_embeddings(train_data, conf))
+    test_data = list(prepare_embeddings(test_data, conf))
     logger.info(f'Fit data to config')
 
-    return data
+    return train_data, test_data
 
 
 def create_ds(train_data, valid_data, conf):
@@ -161,9 +164,8 @@ def main(_):
     conf = get_conf(sys.argv[2:])
 
     model_f = model_by_type(conf['params.model_type'])
-    train_data = read_consumer_data(conf['dataset.train_path'], conf)
-    test_data = read_consumer_data(conf['dataset.test_path'], conf)
-
+    train_data, test_data = read_consumer_data(conf['dataset.train_path'], conf)
+    
     # train
     results = []
 

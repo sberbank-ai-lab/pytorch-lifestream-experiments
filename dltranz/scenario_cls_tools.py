@@ -112,7 +112,7 @@ def train_and_score(kw_params: KWParamsTrainAndScore):
         elif kw_params.model_type == 'xgb':
             model = xgb.XGBClassifier(**kw_params.model_params)
         elif kw_params.model_type == 'lgb':
-            model = lgb.LGBMClassifier(**kw_params.model_params)
+            model = lgb.LGBMClassifier(**kw_params.model_params, random_state=kw_params.fold_n+29)
         elif kw_params.model_type in ('neural_automl', 'fastai'):
             pass
         else:
@@ -122,6 +122,8 @@ def train_and_score(kw_params: KWParamsTrainAndScore):
             model.fit(X_train, y_train)
             score_valid = kw_params.scorer(model, X_valid, y_valid)
             score_test = kw_params.scorer(model, X_test, y_test)
+            preds_valid = model.predict_proba(X_valid)
+            preds_test = model.predict_proba(X_test)
         elif kw_params.model_type == 'neural_automl':
             score_valid = node.train_from_config(X_train.values,
                                                  y_train.values.astype('long'),
@@ -161,12 +163,25 @@ def train_and_score(kw_params: KWParamsTrainAndScore):
         f'oof_{kw_params.scorer_name}': score_valid,
         f'test_{kw_params.scorer_name}': score_test,
     }
-    return res
+
+    preds = pd.DataFrame({
+        **{
+            f'preds_valid_{i}': preds_valid[:,i] for i in range(preds_valid.shape[1])
+        },
+        **{
+            f'preds_test_{i}': preds_test[:,i] for i in range(preds_test.shape[1])
+        },
+        'name': '_'.join([kw_params.model_type, kw_params.name]),
+        'y_valid': y_valid.values,
+        'y_test': y_test.values,
+        'ids': list(range(len(y_valid)))
+    })
+    return res, preds
 
 
 def group_stat_results(df, group_col_name, col_agg_metric=None, col_list_metrics=None, eps=1e-12):
     def values(x):
-        return '[' + ' '.join([f'{i:.3f}' for i in sorted(x)]) + ']'
+        return '[' + ' '.join([f'{i:.3f}' for i in x]) + ']'
 
     def t_interval(x, p=0.95):
         n = len(x)

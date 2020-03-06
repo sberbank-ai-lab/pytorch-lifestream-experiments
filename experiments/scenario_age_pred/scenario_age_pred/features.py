@@ -48,6 +48,16 @@ def _metric_learning_embeddings(conf, file_name):
     df = pd.read_pickle(os.path.join(conf['data_path'], file_name)).set_index(COL_ID)
     return df
 
+def _scores(conf, target_scores_name):
+    valid_files = glob(os.path.join(conf['data_path'], target_scores_name, 'valid', '*'))
+    valid_scores = pd.concat([pd.read_pickle(f) for f in valid_files])
+
+    test_files = glob(os.path.join(conf['data_path'], target_scores_name, 'test', '*'))
+    test_scores = pd.concat([pd.read_pickle(f) for f in test_files]).groupby(COL_ID).mean().reset_index(drop=False)
+
+    df = pd.concat([valid_scores, test_scores]).set_index(COL_ID)
+    
+    return df
 
 def load_features(
         conf,
@@ -69,6 +79,9 @@ def load_features(
 
     if metric_learning_embedding_name is not None:
         features.append(_metric_learning_embeddings(conf, metric_learning_embedding_name))
+
+    if target_scores_name is not None:
+        features.append(_scores(conf, target_scores_name))
 
     return features
 

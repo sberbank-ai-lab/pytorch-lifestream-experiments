@@ -9,8 +9,6 @@ python ../../make_datasets.py \
     --cols_log_norm "amount_rur" \
     --target_files train_target.csv \
     --col_target bins \
-    --test_size 0.1 \
+    --test_size 0.0 \
     --output_train_path "data/train_trx.p" \
-    --output_test_path "data/test_trx.p" \
-    --output_test_ids_path "data/test_ids.csv" \
     --log_file "results/dataset_age_pred.log"

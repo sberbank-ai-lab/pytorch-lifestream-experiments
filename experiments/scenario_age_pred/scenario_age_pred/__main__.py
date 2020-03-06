@@ -16,6 +16,7 @@ if __name__ == '__main__':
 
 from scenario_age_pred import fit_target, pseudo_labeling, fit_finetuning
 from scenario_age_pred import compare_approaches
+from scenario_age_pred import compare_approaches_private
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def parse_args(args=None):
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
 
-    for module in [compare_approaches, fit_target, fit_finetuning, pseudo_labeling]:
+    for module in [compare_approaches, fit_target, fit_finetuning, pseudo_labeling, compare_approaches_private]:
         sub_parser = subparsers.add_parser(module.__name__.split('.')[-1])
         sub_parser.set_defaults(func=module.main)
         module.prepare_parser(sub_parser)
