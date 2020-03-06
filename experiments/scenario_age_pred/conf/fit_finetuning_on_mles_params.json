@@ -60,11 +60,11 @@
 
   "output": {
     "valid": {
-      "path": "data/mles_finetuning_scores_s/valid",
+      "path": "data/mles_finetuning_scores/valid",
       "format": "pickle"
     },
     "test": {
-      "path": "data/mles_finetuning_scores_s/test",
+      "path": "data/mles_finetuning_scores/test",
       "format": "pickle"
     },
     "columns": ["client_id"]
