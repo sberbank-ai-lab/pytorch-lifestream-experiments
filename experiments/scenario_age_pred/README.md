@@ -32,24 +32,13 @@ python ../../metric_learning.py params.device="$SC_DEVICE" --conf conf/dataset.h
 python -m scenario_age_pred fit_finetuning params.device="$SC_DEVICE" --conf conf/dataset.hocon conf/fit_finetuning_on_mles_params.json
 
 
-# Train the Contrastive Predictive Coding (CPC) model; inference
-python ../../train_cpc.py    params.device="$SC_DEVICE" --conf conf/dataset.hocon conf/cpc_params.json
-python ../../ml_inference.py params.device="$SC_DEVICE" --conf conf/dataset.hocon conf/cpc_params.json
-# Fine tune the CPC model in supervised mode and save scores to the file
-python -m scenario_age_pred fit_finetuning params.device="$SC_DEVICE" --conf conf/dataset.hocon conf/fit_finetuning_on_cpc_params.json
-
-
-# Train the Contrastive Predictive Coding (CPC v2) model; inference 
-python ../../cpc_v2_learning.py params.device="$SC_DEVICE" --conf conf/dataset.hocon conf/cpc_v2_params.json
-python ../../ml_inference.py    params.device="$SC_DEVICE" --conf conf/dataset.hocon conf/cpc_v2_params.json
-
-
 # Run estimation for different approaches
 # Check some options with `--help` argument
-python -m scenario_age_pred compare_approaches --n_workers 1 \
+python -m scenario_age_pred compare_approaches_private --n_workers 5 \
+    --models 'lgb' \
     --add_baselines --add_emb_baselines \
-    --embedding_file_names "mles_embeddings.pickle" "cpc_embeddings.pickle" "cpc_v2_embeddings.pickle" \
-    --score_file_names "target_scores" "mles_finetuning_scores" 'cpc_finetuning_scores'
+    --embedding_file_names "mles_embeddings.pickle" \
+    --score_file_names "target_scores" "mles_finetuning_scores"
 
 
 # check the results
