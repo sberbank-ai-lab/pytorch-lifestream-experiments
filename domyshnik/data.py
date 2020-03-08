@@ -59,7 +59,6 @@ def mnist_torch_augmentation(p=1):
         #transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False)
     ])
 
-
 def cifar_torch_augmentation(p=1):
     return torchvision.transforms.Compose([
                 
@@ -93,6 +92,13 @@ def cifar_torch_augmentation(p=1):
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
     ])
 
+def cifa10_base_aug():
+    return torchvision.transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
+    ]
+    )
+
 def cifar10_normilise(img):
     return transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))(img) 
 
@@ -104,6 +110,7 @@ class MetrLearnDataset(torch.utils.data.Dataset):
         self.aug = augmenter
         self.n_augments = n_augments
         self.augment_labels = augment_labels
+        self.base_aug = cifa10_base_aug()
         
     def draw(self, idx):
         imgs, _ = self[idx]
@@ -117,12 +124,22 @@ class MetrLearnDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.data)
 
-    
     def __getitem__(self, idx):
         img, lbl = self.data[idx]
-        #imgs = [cifar10_normilise(transforms.ToTensor()(img))] + [self.aug(img) for i in range(self.n_augments)]
-        imgs = [self.aug(img) for i in range(self.n_augments + 1)]
-        b_img = torch.stack(imgs).squeeze()
+
+        if self.n_augments > 0:
+            imgs = [self.aug(img) for i in range(self.n_augments + 1)]
+            b_img = torch.stack(imgs).squeeze()
+
+        elif self.n_augments == -1: # no augments, return original image
+            b_img = self.base_aug(img)
+
+        elif self.n_augments == 0: # one augment with probability
+            b_img = self.aug(img) if random.random() > 0.5 else self.base_aug(img)
+
+        elif self.n_augments == -2: # raw pil image
+            b_img = transforms.ToTensor()(img)
+
         if not self.augment_labels:
             return b_img, lbl
         else:
@@ -135,7 +152,47 @@ class MetrLearnDataset(torch.utils.data.Dataset):
             reward = -1.0 if lbl == new_lbl else BAD_REWARD
             return b_img, (new_lbl, lbl, reward)
         
-    
+
+class DataLoaderWrapper:
+
+    def __init__(self, base_loader, centroids, n_augments=0, augmenter=None):
+        self.loader = base_loader
+
+        # centroids for augmentation
+        toPil = transforms.ToPILImage()
+        self.centroids = [toPil(centroid) for centroid in centroids]
+        self.centroids_count = len(self.centroids)
+
+        # original centroids
+        norm = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
+        self.centers = [norm(centroid) for centroid in centroids]
+        self.centers = torch.stack(self.centers)
+
+        self.n_augments = n_augments
+        self.aug = augmenter
+
+    def get_centroids(self):
+        if self.aug is not None:
+            augmentations = []
+            for centroid in self.centroids:
+                centroid_augments = [self.aug(centroid) for i in range(self.n_augments)]
+                augmentations += centroid_augments
+            augmented_centroids = torch.stack(augmentations, 0)
+
+            labels = torch.arange(self.centroids_count).view(1, -1).repeat(self.n_augments, 1).transpose(0, 1).flatten()
+
+            return augmented_centroids, labels
+        return self.centers, torch.arange(self.centroids_count)
+
+    def __len__(self):
+        return len(self.loader)
+
+    def __iter__(self):
+        for data in self.loader:
+            centrs = self.get_centroids()
+            yield data, centrs
+
+
 def get_mnist_train_loader(batch_size, n_augments=4, augment_labels=False):
     data_train = MetrLearnDataset(dataset=mnist_train_dataset(), 
                             augmenter=mnist_torch_augmentation(p=1), 
@@ -195,3 +252,53 @@ def get_cifar10_test_loader_without_augmentation(batch_size=1):
                                               shuffle=False,
                                               num_workers=5)
     return test_data_loader
+
+def get_cifar10_train_global_loader(batch_size, centroids, n_augments):
+    data_train = MetrLearnDataset(dataset=cifar10_train_dataset(), 
+                                  augmenter=cifar_torch_augmentation(p=1), 
+                                  n_augments=0,
+                                  augment_labels=False)
+    
+    base_train_data_loader = torch.utils.data.DataLoader(data_train,
+                                                         batch_size=batch_size,
+                                                         shuffle=True,
+                                                         num_workers=16)
+
+    train_loader = DataLoaderWrapper(base_loader=base_train_data_loader,
+                                     centroids=centroids,
+                                     n_augments=n_augments,
+                                     augmenter=cifar_torch_augmentation(p=1))
+
+    return train_loader
+    
+
+def get_cifar10_test_global_loader(batch_size, centroids):
+    data_test = MetrLearnDataset(dataset=cifar10_test_dataset(), 
+                                  augmenter=cifar_torch_augmentation(p=1), 
+                                  n_augments=-1,
+                                  augment_labels=False)
+    
+    base_test_data_loader = torch.utils.data.DataLoader(data_test,
+                                                         batch_size=batch_size,
+                                                         shuffle=False,
+                                                         num_workers=5)
+
+    test_loader = DataLoaderWrapper(base_loader=base_test_data_loader,
+                                     centroids=centroids,
+                                     n_augments=0)
+
+    return test_loader
+
+def get_cifar10_centroids(count, loader):
+    b_count =  int(float(count)/(len(loader))) # number of samples to take from batch
+    centroids = []
+    for imgs, _ in loader:
+
+        b_rate = min(float(b_count)/imgs.size(0), 1.0)
+        mask = torch.bernoulli(b_rate * torch.ones(imgs.size(0))).bool()
+
+        b_centroids = imgs[mask].contiguous()
+        centroids.append(b_centroids)
+
+    centroids = torch.cat(centroids, 0)
+    return centroids

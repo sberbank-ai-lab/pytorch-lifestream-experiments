@@ -128,7 +128,7 @@ class Learner:
                                                  input_dim=256, 
                                                  num_classes=NUM_CLASSES, 
                                                  device=self.device)'''
-            self.clust_loss = ClusterisationLoss2(device=self.device)
+            self.clust_loss = InClusterisationLoss(device=self.device)
             self.clust_loss.to(self.device)
 
         
@@ -138,6 +138,7 @@ class Learner:
         losses_pos, losses_neg = [], []
         total_recall, total, corrects = 0, 0, 0
         clust_neg_losses, clust_pos_losses = [], []
+        e2c_losses = []
         with tqdm.tqdm(total=len(self.train_loader)) as steps:
             for itr, data in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
@@ -157,6 +158,38 @@ class Learner:
 
                     steps.set_postfix({"loss": loss_val,
                                        "accuracy": accuracy})
+
+                elif self.mode == 'metric_learning_global':
+                    embeddings, centroids = out[0], out[1]
+
+                    # centroids
+                    centroids_labels = torch.arange(int(centroids.size(0)/(N_AUGMENTS + 1))).view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
+                    K = N_AUGMENTS
+                    loss_pos, loss_neg = self.loss(centroids, centroids_labels)
+                    losses_pos.append(loss_pos.item())
+                    losses_neg.append(loss_neg.item())
+                    loss_pos_val = self.running_average(losses_pos)
+                    loss_neg_val = self.running_average(losses_neg)
+                    k_pos, k_neg = self.add_info['k_pos_centroids'], self.add_info['k_neg_centroids']
+
+                    total_recall += metric_Recall_top_K(out, labels, K)
+
+                    # cluster loss
+                    centers = centroids.detach() # we want that centroids trains independent from other samples (but samples are depend from centroids)
+                    embeds_to_centers_loss = self.clust_loss(embeddings, centers)
+                    e2c_losses.append(embeds_to_centers_loss.item())
+                    e2c_val = self.running_average(e2c_losses)
+                    k_e2c = self.add_info['k_cluster']
+
+                    loss = k_pos * loss_pos + k_neg * loss_neg + k_e2c * embeds_to_centers_loss
+
+                    steps.set_postfix({"loss_pos_centroids": loss_pos_val * k_pos,
+                                       "loss_neg_centroids": loss_neg_val * k_neg,
+                                       "loss_cluster": c_pos_val * k_e2c,
+                                       "recall": total_recall/(itr + 1),
+                                       #"margings": margings
+                                       })
+
 
                 elif self.mode == 'metric_learning': 
                     if CURRENT_PARAMS in ['metric_learning_per_sampl', 'cifar10_metric_learning_per_sampl']:

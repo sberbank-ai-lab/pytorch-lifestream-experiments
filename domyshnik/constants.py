@@ -16,9 +16,10 @@ DEVICE = 'cuda'
 ERROR_RATE = 0.5
 
 SAVE_MODELS = True
-CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
+#CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
 #CURRENT_PARAMS = 'cifar10_classification_metric_learning_per_sampl'
 #CURRENT_PARAMS = 'cifar10_domyshnik'
+CURRENT_PARAMS = 'cifar10_metric_learning_global'
 
 class config_params:
 
@@ -142,6 +143,25 @@ PARAMS = {
                                                          'k_clust_pos': 10000#1
                                                          }
                                                          ),
+
+    "cifar10_metric_learning_global": config_params(n_augments=15,
+                                                    lr=0.002,
+                                                    gamma=0.9025,
+                                                    batch_size=800,
+                                                    epochs=250,
+                                                    sampling_strategy='HardNegativePair',
+                                                    negatives_cnt=15,
+                                                    marging=0.5,
+                                                    step_size=5,
+                                                    model_postfix='cifar10_global',
+                                                    device='cuda',
+                                                    add_info={  'centroids_count': 200,
+                                                                'use_clusterisation_loss': True,
+                                                                'losses': ['InClusterisationLoss', 
+                                                                           'ContrastiveLossOriginal_centroids',
+                                                                           'ContrastiveLossOriginal_images']
+                                                                }
+                                                                ),
 
     "cifar10_classification_metric_learning_per_sampl": config_params(n_augments=1,
                                                                     lr=0.0004,#0.002,

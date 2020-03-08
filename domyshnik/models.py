@@ -158,6 +158,31 @@ class Cifar10MetricLearningNet3(nn.Module):
 
         return x
 
+class Cifar10MetricLearningNetCentroids(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.w = tvm.resnet50()
+
+        self.head = nn.Sequential(*[
+            #nn.Dropout(p=0.5),
+            nn.Linear(1000, 512),
+            nn.ReLU(),
+
+            #nn.Dropout(p=0.7),
+            nn.Linear(512, 256),
+
+            L2Normalization()
+        ])
+
+
+    def forward(self, x):
+        #x = x.view(-1, 3, x.size(-2), x.size(-1)) # b, augs, 3, x, y -> b*augs, 3, x, y
+        x = self.w(x)
+        x = self.head(x)
+
+        return x
+
 # --------------------------------------------------------------------------------------------------
 
 class MnistClassificationMetricLearningModel(nn.Module):

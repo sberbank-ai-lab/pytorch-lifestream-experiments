@@ -41,6 +41,33 @@ class ContrastiveLoss(nn.Module):
         return f'pos {self.margin * self.kpos}, neg {self.margin *self.kneg}'
 
 
+class ContrastiveLossOriginal(nn.Module):
+    """
+    Contrastive loss
+    
+    "Signature verification using a siamese time delay neural network", NIPS 1993
+    https://papers.nips.cc/paper/769-signature-verification-using-a-siamese-time-delay-neural-network.pdf
+    """
+
+    def __init__(self, margin, pair_selector):
+        super(ContrastiveLossOriginal, self).__init__()
+        self.margin = margin
+        self.pair_selector = pair_selector
+
+    def forward(self, embeddings, target):
+        
+        positive_pairs, negative_pairs = self.pair_selector.get_pairs(embeddings, target)
+        positive_loss = F.pairwise_distance(embeddings[positive_pairs[:, 0]], embeddings[positive_pairs[:, 1]]).pow(2)
+
+        positive_loss = positive_loss.sum()
+        
+        negative_loss = F.relu(
+            self.margin - F.pairwise_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
+        ).pow(2).sum()
+        
+        return positive_loss, negative_loss
+
+
 class LocalConstantLoss(nn.Module):
 
     def __init__(self, margin, pair_selector):
@@ -150,14 +177,12 @@ class ClusterisationLoss2(nn.Module):
         super(ClusterisationLoss2, self).__init__()
         self.norm = L2Normalization()
         self.device = device
-        self.centroids = nn.Parameter(torch.randn(10, 256))
 
     # embeddings: Nxd, centroids: Kxd
-    def forward(self, embeddings):
+    def forward(self, embeddings, centroids):
         N, K = embeddings.size(0), self.centroids.size(0)
 
-        centers = self.centroids
-        centers = self.norm(centers)
+        centers = centroids
                 
         # distances to each centroid (cosine)
         D = torch.matmul(centers, embeddings.transpose(0, 1)) # KxN
@@ -177,3 +202,33 @@ class ClusterisationLoss2(nn.Module):
         between_cluster_dist = Dc.sum()/(K*K) # max - because cosine distance
 
         return in_cluster_dist, between_cluster_dist
+
+
+class InClusterisationLoss(nn.Module):
+
+    def __init__(self, device):
+        super(InClusterisationLoss, self).__init__()
+        self.device = device
+
+    # embeddings: Nxd, centroids: Kxd
+    def forward(self, embeddings, centroids):
+        N, K = embeddings.size(0), centroids.size(0)
+
+        centers = centroids
+                
+        # distances to each centroid (cosine)
+        D = torch.matmul(centers, embeddings.transpose(0, 1)) # KxN
+
+        # mask
+        centr_idx = torch.argmin(D, dim=0).detach()
+        centr_mask = (centr_idx.repeat(K).view(K, -1) == torch.arange(K).view(-1, 1).repeat(1, N).to(self.device)).int() # KxN
+        weights = centr_mask.sum(-1) + 1
+
+        Dmasked = D * centr_mask
+
+        # in cluster distance
+        in_cluster_dist = -1 * torch.div(Dmasked.sum(-1), weights).sum()/K # -1 - because cosine distance
+
+        return in_cluster_dist
+
+

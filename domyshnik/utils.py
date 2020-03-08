@@ -132,6 +132,17 @@ class LaunchInfo:
 # -------------------------- predefind configs --------------------------------
 
 def get_launch_info():
+    # setup losses
+    losses = []
+    for loss_name in ADD_INFO['losses']:
+        if 'ContrastiveLossOriginal' in loss_name:
+            losses.append((ContrastiveLossOriginal(margin=MARGING, 
+                                                    pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), loss_name))
+
+        if 'InClusterisationLoss' in loss_name:
+            losses.append((InClusterisationLoss(torch.device(DEVICE)), loss_name))
+    ADD_INFO['losses'] = losses
+
     if CURRENT_PARAMS == 'mnist_classification':
         mnist_classification_lunch_info = LaunchInfo(model=MnistClassificationNet(), 
                                                     loss=torch.nn.NLLLoss(), 
@@ -210,6 +221,28 @@ def get_launch_info():
                                                     epochs=EPOCHS, 
                                                     device=DEVICE,
                                                     mode='metric_learning',
+                                                    model_name='cifar10_metric_learning.w',
+                                                    add_info=ADD_INFO)
+        return cifar10_metriclearning_lunch_info
+
+    elif CURRENT_PARAMS in ['cifar10_metric_learning_global']: 
+        loader = get_cifar10_train_loader(1000, n_augments=-2, augment_labels=False)
+        centroids = get_cifar10_centroids(ADD_INFO['centroids_count'], loader)    
+        print(f'centroids count {centroids.size(0)}')
+
+        cifar10_metriclearning_lunch_info = LaunchInfo(model=Cifar10MetricLearningNetCentroids(), 
+                                                    loss=ContrastiveLossOriginal(margin=MARGING, 
+                                                                                 pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
+                                                    optimizer=None, 
+                                                    scheduler=None, 
+                                                    train_loader=get_cifar10_train_global_loader(batch_size=BATCH_SIZE, 
+                                                                                                 centroids=centroids, 
+                                                                                                 n_augments=N_AUGMENTS),
+                                                    test_loader=get_cifar10_test_global_loader(batch_size=BATCH_SIZE, 
+                                                                                               centroids=centroids),
+                                                    epochs=EPOCHS, 
+                                                    device=DEVICE,
+                                                    mode='metric_learning_global',
                                                     model_name='cifar10_metric_learning.w',
                                                     add_info=ADD_INFO)
         return cifar10_metriclearning_lunch_info
