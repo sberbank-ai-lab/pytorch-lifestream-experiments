@@ -80,7 +80,7 @@ class RnnEncoder(nn.Module):
 
         # prepare initial state
         if self.trainable_starter == 'static':
-            h_0 = self.starter_h.expand(-1, len(x.seq_lens), -1).contiguous()
+            h_0 = torch.tanh(self.starter_h.expand(-1, len(x.seq_lens), -1).contiguous())
         else:
             h_0 = None
 

@@ -7,7 +7,7 @@
     "model_type": "rnn",
     "rnn": {
       "type": "gru",
-      "hidden_size": 256,
+      "hidden_size": 512,
       "bidir": false,
       "trainable_starter": "static"
     },
@@ -33,8 +33,8 @@
         "amount": "identity"
       }
     },
-    "use_atan": false,
-    "use_normalization_layer": true,
+    "use_atan": true,
+    "use_normalization_layer": false,
     "lr_scheduler": {
       "step_size": 10,
       "step_gamma": 0.9025
@@ -52,9 +52,9 @@
       "trx_dropout": 0.01,
       "max_seq_len": 1200,
       "neg_count": 5,
-      "loss": "MarginLoss",
-      "margin": 0.2,
-      "beta": 0.4,
+      "loss": "ContrastiveLoss",
+      "_kld_loss": {},
+      "margin": 0.5,
       "lr": 0.002,
       "weight_decay": 0.0,
       "n_epoch": 150
@@ -75,12 +75,12 @@
 
   "save_model": true,
   "model_path": {
-    "model": "models/mles_model.p",
+    "model": "models/mles_sc_model.p",
     "only_encoder": false
   },
 
   "output": {
-    "path": "data/mles_embeddings",
+    "path": "data/mles_sc_embeddings",
     "format": "pickle",
     "columns": ["customer_id"]
   },

@@ -7,10 +7,13 @@
     "model_type": "rnn",
     "rnn": {
       "type": "gru",
-      "hidden_size": 256,
+      "hidden_size": 800,
       "bidir": false,
       "trainable_starter": "static"
     },
+    "use_atan": true,
+    "use_normalization_layer" : false,
+    "use_split": false,
     "transf": {
       "shared_layers": false,
       "input_size": 64,
@@ -26,38 +29,39 @@
       "norm_embeddings": false,
       "embeddings_noise": 0.003,
       "embeddings": {
-        "mcc_code": {"in": 200, "out": 48},
-        "tr_type": {"in": 100, "out": 24}
+        "trans_date": {"in": 800, "out": 16},
+        "small_group": {"in": 250, "out": 16}
       },
       "numeric_values": {
-        "amount": "identity"
+        "amount_rur": "identity"
       }
     },
-    "use_atan": false,
-    "use_normalization_layer": true,
     "lr_scheduler": {
-      "step_size": 10,
+      "step_size": 30,
       "step_gamma": 0.9025
     },
     "train": {
-      "num_workers": 8,
-      "batch_size": 128,
+      "num_workers": 16,
+      "batch_size": 64,
       "split_strategy": {
         "split_strategy": "SampleSlices",
         "split_count": 5,
-        "cnt_min": 15,
-        "cnt_max": 75
+        "cnt_min": 25,
+        "cnt_max": 150
       },
       "sampling_strategy": "HardNegativePair",
       "trx_dropout": 0.01,
       "max_seq_len": 1200,
       "neg_count": 5,
-      "loss": "MarginLoss",
-      "margin": 0.2,
-      "beta": 0.4,
+      "loss": "ContrastiveLoss",
+      "margin": 0.5,
       "lr": 0.002,
       "weight_decay": 0.0,
-      "n_epoch": 150
+      "n_epoch": 100,
+      "kld_loss": {
+        "w1": 0.0003,
+        "norm": true
+      }
     },
     "norm_scores": false,
     "valid": {
@@ -73,20 +77,19 @@
     }
   },
 
+  "stats": {
+    "path": "runs/age_pred_ml_result.json"
+  },
+
   "save_model": true,
   "model_path": {
-    "model": "models/mles_model.p",
+    "model": "models/mles_sc_model.p",
     "only_encoder": false
   },
 
   "output": {
-    "path": "data/mles_embeddings",
+    "path": "data/mles_sc_embeddings",
     "format": "pickle",
-    "columns": ["customer_id"]
-  },
-
-  "stats": {
-    "path": "runs/mles_result.json"
+    "columns": ["client_id"]
   }
-
 }

@@ -1,4 +1,5 @@
 # coding: utf-8
+import logging
 import os
 import sys
 import torch
@@ -15,13 +16,16 @@ sys.path.append(os.path.join(script_dir, '../..'))
 from dltranz.seq_encoder import RnnEncoder, LastStepEncoder, PerTransTransf, FirstStepEncoder
 from dltranz.trx_encoder import TrxEncoder
 
+logger = logging.getLogger(__name__)
+
+
 # TODO: is the same as dltranz.seq_encoder.NormEncoder
 class L2Normalization(nn.Module):
     def __init__(self):
         super(L2Normalization, self).__init__()
 
     def forward(self, input):
-        return input.div(torch.norm(input, dim=1).view(-1, 1))
+        return input.div(torch.norm(input, dim=1).view(-1, 1) + 1e-9)
 
 
 class Binarization(Function):
@@ -46,14 +50,32 @@ class BinarizationLayer(nn.Module):
         return binary(self.linear(x))
 
 
+class ATan(torch.nn.Module):
+    def forward(self, x):
+        return torch.log1p(x + 1e-9) - torch.log1p(-x + 1e-9)
+
+
 def rnn_model(params):
-    layers = [
+    encoder_layers = [
         TrxEncoder(params['trx_encoder']),
         RnnEncoder(TrxEncoder.output_size(params['trx_encoder']), params['rnn']),
         LastStepEncoder(),
     ]
+    if params['use_atan']:
+        encoder_layers.append(
+            ATan(),
+        )
+        logger.info('+ ATan()')
+    if params['use_split']:
+        encoder_layers.append(
+            torch.nn.Linear(params['rnn.hidden_size'], params['rnn.hidden_size'] * 2),
+        )
+        logger.info('+ LinearSplit')
+    layers = [torch.nn.Sequential(*encoder_layers)]
+
     if params['use_normalization_layer']:
         layers.append(L2Normalization())
+        logger.info('L2Normalization included')
     m = torch.nn.Sequential(*layers)
     return m
 

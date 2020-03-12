@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 def batch_to_device(batch, device, non_blocking):
     x, y = batch
     if not isinstance(x, dict):
-        new_x = {k: v.to(device=device, non_blocking=non_blocking) if isinstance(v, torch.Tensor) else v for k, v in x.payload.items()}
+        new_x = {k: v.to(device=device, non_blocking=non_blocking) if isinstance(v, torch.Tensor) else v for k, v in
+                 x.payload.items()}
         new_y = y.to(device=device, non_blocking=non_blocking)
         return PaddedBatch(new_x, x.seq_lens), new_y
     else:
@@ -98,10 +99,10 @@ def get_lr_scheduler(optimizer, params):
 
             if scheduler_type == 'MultiGammaScheduler':
                 scheduler = MultiGammaScheduler(optimizer,
-                                         milestones=scheduler_params['milestones'],
-                                         gammas=scheduler_params['gammas'],
-                                         gamma=scheduler_params['gamma'],
-                                         last_epoch=scheduler_params['last_epoch'])
+                                                milestones=scheduler_params['milestones'],
+                                                gammas=scheduler_params['gammas'],
+                                                gamma=scheduler_params['gamma'],
+                                                last_epoch=scheduler_params['last_epoch'])
 
             logger.info('MultiGammaScheduler used')
     else:
@@ -130,7 +131,6 @@ class MlflowHandler:
         self.logger = logger
 
     def __call__(self, train_engine, valid_engine, optimizer):
-
         def global_state_transform(*args, **kwargs):
             return train_engine.state.iteration
 
@@ -160,7 +160,6 @@ class MlflowHandler:
         )
 
 
-
 class TensorboardHandler:
     def __init__(self, log_dir):
         self.logger = SummaryWriter(log_dir)
@@ -180,6 +179,13 @@ class PrepareEpoch:
             self.train_loader.prepare_epoch()
 
 
+def kld_f(embeddings):
+    d = embeddings.size()[1] // 2
+    mu, logvar = embeddings[:, :d], embeddings[:, d:]
+    kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    return kld
+
+
 def fit_model(model, train_loader, valid_loader, loss, optimizer, scheduler, params, valid_metrics, train_handlers):
     device = torch.device(params.get('device', 'cpu'))
     model.to(device)
@@ -190,14 +196,20 @@ def fit_model(model, train_loader, valid_loader, loss, optimizer, scheduler, par
         loss_fn=loss,
         device=device,
         prepare_batch=batch_to_device,
-        output_transform=lambda x, y, y_pred, loss: \
-                (loss.item(), x[next(iter(x.keys()))].seq_lens if isinstance(x, dict) else x.seq_lens),
+        output_transform=lambda x, y, y_pred, loss:
+        (
+            loss.item(),
+            x[next(iter(x.keys()))].seq_lens if isinstance(x, dict) else x.seq_lens,
+            kld_f(y_pred).item(),
+        ),
     )
 
     RunningAverage(output_transform=lambda x: x[0]).attach(trainer, 'loss')
     RunningAverage(output_transform=lambda x: x[1].float().mean()).attach(trainer, 'seq_len')
+    RunningAverage(output_transform=lambda x: x[2]).attach(trainer, 'loss_kld')
+    RunningAverage(output_transform=lambda x: x[0] - x[2]).attach(trainer, 'loss_ml')
     pbar = ProgressBar(persist=True, bar_format="")
-    pbar.attach(trainer, ['loss', 'seq_len'])
+    pbar.attach(trainer, ['loss', 'seq_len', 'loss_kld', 'loss_ml'])
 
     validation_evaluator = create_supervised_evaluator(
         model=model,
