@@ -20,6 +20,7 @@ SAVE_MODELS = True
 #CURRENT_PARAMS = 'cifar10_classification_metric_learning_per_sampl'
 #CURRENT_PARAMS = 'cifar10_domyshnik'
 CURRENT_PARAMS = 'cifar10_metric_learning_global'
+#CURRENT_PARAMS = 'cifar10_metric_learning_global_basis'
 
 class config_params:
 
@@ -144,24 +145,51 @@ PARAMS = {
                                                          }
                                                          ),
 
-    "cifar10_metric_learning_global": config_params(n_augments=15,
-                                                    lr=0.002,
-                                                    gamma=0.9025,
-                                                    batch_size=800,
-                                                    epochs=250,
-                                                    sampling_strategy='HardNegativePair',
-                                                    negatives_cnt=15,
-                                                    marging=0.5,
-                                                    step_size=5,
-                                                    model_postfix='cifar10_global',
-                                                    device='cuda',
-                                                    add_info={  'centroids_count': 200,
-                                                                'use_clusterisation_loss': True,
-                                                                'losses': ['InClusterisationLoss', 
-                                                                           'ContrastiveLossOriginal_centroids',
-                                                                           'ContrastiveLossOriginal_images']
-                                                                }
-                                                                ),
+    "cifar10_metric_learning_global": config_params(
+        n_augments=5,
+        lr=0.002,
+        gamma=0.9025,
+        batch_size=128,
+        epochs=50,
+        sampling_strategy='HardNegativePair',
+        negatives_cnt=5,
+        marging=0.5,
+        step_size=5,
+        model_postfix='cifar10_global_c500_caug5_iaug5_cmrg05_imrg02_v2',
+        device='cuda:0',
+        add_info={  'centroids_count': 500,
+                    'losses': [
+                        {'name': 'InClusterisationLoss'}, 
+                        {'name': 'ContrastiveLossOriginal_centroids', 'marging': 0.5, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'},
+                        {'name': 'ContrastiveLossOriginal_images', 'marging': 0.2, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        ],
+                    'n_augs_imgs': 5
+                    }
+                    
+        ),
+
+    "cifar10_metric_learning_global_basis": config_params(
+        n_augments=5,
+        lr=0.002,
+        gamma=0.9025,
+        batch_size=128,
+        epochs=50,
+        sampling_strategy='HardNegativePair',
+        negatives_cnt=5,
+        marging=0.5,
+        step_size=5,
+        model_postfix='cifar10_global_c100_caug5_iaug5_cmrg05_imrg01_basis',
+        device='cuda:3',
+        add_info={  'centroids_count': 100,
+                    'losses': [
+                        {'name': 'BasisClusterisationLoss'}, 
+                        {'name': 'ContrastiveLossOriginal_centroids', 'marging': 0.5, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'},
+                        {'name': 'ContrastiveLossOriginal_images', 'marging': 0.1, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        ],
+                    'n_augs_imgs': 5
+                    }
+                    
+        ),
 
     "cifar10_classification_metric_learning_per_sampl": config_params(n_augments=1,
                                                                     lr=0.0004,#0.002,
@@ -172,23 +200,26 @@ PARAMS = {
                                                                     negatives_cnt=3,
                                                                     marging=0.5,
                                                                     step_size=1,
-                                                                    model_postfix='cifar10_per_sampl'),
+                                                                    model_postfix='cifar10_per_sampl',
+                                                                    add_info={}),
 
     "cifar10_domyshnik": config_params(n_augments=9,
                                lr=0.0004,
                                gamma=0.9025,
                                batch_size=128,
                                epochs=150,
-                               sampling_strategy='HardNegativePairKlDiv',
+                               sampling_strategy='HardNegativePair',#'HardNegativePairKlDiv',
                                negatives_cnt=10,
                                marging=0.1,
                                step_size=5,
                                model_postfix='cifar10_domyshnik',
+                               device='cuda:1',
                                add_info={'refresh_reward_step': 400,
-                                         'k_pos' : 0.25*0.3, 
-                                         'k_neg': 200*0.3, 
-                                         'k_reward': 15,
-                                         'factor': 1})                                                                                                            
+                                         'k_pos' : 1,#1,#0.25*0.3, 
+                                         'k_neg': 1,#1,#200*0.3, 
+                                         'k_reward': 15,#15,
+                                         'centroids_count': 150,
+                                         'factor': 1})                                                                                                           
 }
 
 cparams = PARAMS[CURRENT_PARAMS]

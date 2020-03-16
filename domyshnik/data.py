@@ -59,7 +59,7 @@ def mnist_torch_augmentation(p=1):
         #transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False)
     ])
 
-def cifar_torch_augmentation(p=1):
+def cifar_torch_augmentation_strong(p=1):
     return torchvision.transforms.Compose([
                 
         transforms.RandomApply([
@@ -92,10 +92,31 @@ def cifar_torch_augmentation(p=1):
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
     ])
 
+def cifar_torch_augmentation(p=1):
+    return torchvision.transforms.Compose([
+        transforms.RandomApply([
+            transforms.RandomResizedCrop(size=32, scale=(0.5, 1.0))
+            ], p=0.5),
+        
+        transforms.RandomApply([
+            transforms.ColorJitter(brightness=0.3, 
+                                   contrast=0.3,#0.7, 
+                                   saturation=(0.3, 0.5),#(0.5, 1), 
+                                   hue=0.5)
+            ], p=0.5),
+        
+        transforms.RandomApply([
+            transforms.RandomHorizontalFlip()
+        ], p=0.7),
+        
+        transforms.ToTensor(),
+        #transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
+    ])
+
 def cifa10_base_aug():
     return torchvision.transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
+        #transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
     ]
     )
 
@@ -128,7 +149,8 @@ class MetrLearnDataset(torch.utils.data.Dataset):
         img, lbl = self.data[idx]
 
         if self.n_augments > 0:
-            imgs = [self.aug(img) for i in range(self.n_augments + 1)]
+            #imgs = [self.aug(img) for i in range(self.n_augments + 1)]
+            imgs = [self.base_aug(img)] + [self.aug(img) for i in range(self.n_augments)]
             b_img = torch.stack(imgs).squeeze()
 
         elif self.n_augments == -1: # no augments, return original image
@@ -157,6 +179,7 @@ class DataLoaderWrapper:
 
     def __init__(self, base_loader, centroids, n_augments=0, augmenter=None):
         self.loader = base_loader
+        self.base_aug = cifa10_base_aug()
 
         # centroids for augmentation
         toPil = transforms.ToPILImage()
@@ -164,9 +187,10 @@ class DataLoaderWrapper:
         self.centroids_count = len(self.centroids)
 
         # original centroids
-        norm = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
-        self.centers = [norm(centroid) for centroid in centroids]
-        self.centers = torch.stack(self.centers)
+        #norm = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
+        #self.centers = [norm(centroid) for centroid in centroids]
+        #self.centers = torch.stack(self.centers)
+        self.centers = centroids
 
         self.n_augments = n_augments
         self.aug = augmenter
@@ -175,7 +199,7 @@ class DataLoaderWrapper:
         if self.aug is not None:
             augmentations = []
             for centroid in self.centroids:
-                centroid_augments = [self.aug(centroid) for i in range(self.n_augments)]
+                centroid_augments = [self.base_aug(centroid)] + [self.aug(centroid) for i in range(self.n_augments - 1)]
                 augmentations += centroid_augments
             augmented_centroids = torch.stack(augmentations, 0)
 
@@ -253,10 +277,10 @@ def get_cifar10_test_loader_without_augmentation(batch_size=1):
                                               num_workers=5)
     return test_data_loader
 
-def get_cifar10_train_global_loader(batch_size, centroids, n_augments):
+def get_cifar10_train_global_loader(batch_size, centroids, n_augments_centroids, n_augments_images):
     data_train = MetrLearnDataset(dataset=cifar10_train_dataset(), 
                                   augmenter=cifar_torch_augmentation(p=1), 
-                                  n_augments=0,
+                                  n_augments=n_augments_images - 1,
                                   augment_labels=False)
     
     base_train_data_loader = torch.utils.data.DataLoader(data_train,
@@ -266,7 +290,7 @@ def get_cifar10_train_global_loader(batch_size, centroids, n_augments):
 
     train_loader = DataLoaderWrapper(base_loader=base_train_data_loader,
                                      centroids=centroids,
-                                     n_augments=n_augments,
+                                     n_augments=n_augments_centroids,
                                      augmenter=cifar_torch_augmentation(p=1))
 
     return train_loader

@@ -28,7 +28,8 @@ def outer_pairwise_kl_distance(A, B=None):
 
         return F.kl_div(
             F.log_softmax(A[:, None].expand(n, m, d).reshape((-1, d)), dim=-1),
-            B.expand(n, m, d).reshape((-1, d)),
+            B.expand(n, m, d).reshape((-1, d)), # i think that this was a misatake because B is not a valid distribution
+            #F.softmax(B.expand(n, m, d).reshape((-1, d)), -1),
             reduction='none'
         ).sum(-1).reshape((n, m))
 
@@ -77,17 +78,18 @@ class HardNegativeKLDivPairSelector(PairSelector):
 
 # ----------------------------------------------------------------------------------------------
 
-def get_sampling_strategy(params='HardNegativePair'):
+def get_sampling_strategy(params='HardNegativePair', neg_count=None):
+
     if params == 'HardNegativePair':
         kwargs = {
-            'neg_count' : NEGATIVES_COUNT,
+            'neg_count' : NEGATIVES_COUNT if neg_count is None else neg_count,
         }
         kwargs = {k:v for k,v in kwargs.items() if v is not None}
         sampling_strategy = HardNegativePairSelector(**kwargs)
         return sampling_strategy
     elif params == 'HardNegativePairKlDiv':
         kwargs = {
-            'neg_count' : NEGATIVES_COUNT,
+            'neg_count' : NEGATIVES_COUNT if neg_count is None else neg_count,
         }
         kwargs = {k:v for k,v in kwargs.items() if v is not None}
         sampling_strategy = HardNegativeKLDivPairSelector(**kwargs)
@@ -133,15 +135,20 @@ class LaunchInfo:
 
 def get_launch_info():
     # setup losses
-    losses = []
-    for loss_name in ADD_INFO['losses']:
-        if 'ContrastiveLossOriginal' in loss_name:
-            losses.append((ContrastiveLossOriginal(margin=MARGING, 
-                                                    pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), loss_name))
+    if 'losses' in ADD_INFO:
+        losses = []
+        for loss in ADD_INFO['losses']:
+            if 'ContrastiveLossOriginal' in loss['name']:
+                l = ContrastiveLossOriginal(margin=loss['marging'], pair_selector=get_sampling_strategy(loss['sampling_strategy'], loss['neg_count']))
+                losses.append((l, loss['name']))
 
-        if 'InClusterisationLoss' in loss_name:
-            losses.append((InClusterisationLoss(torch.device(DEVICE)), loss_name))
-    ADD_INFO['losses'] = losses
+            if 'InClusterisationLoss' in loss['name']:
+                losses.append((InClusterisationLoss(torch.device(DEVICE)), loss['name']))
+
+            if 'BasisClusterisationLoss' in loss['name']:
+                losses.append((BasisClusterisationLoss(torch.device(DEVICE)), loss['name']))
+
+        ADD_INFO['losses'] = losses
 
     if CURRENT_PARAMS == 'mnist_classification':
         mnist_classification_lunch_info = LaunchInfo(model=MnistClassificationNet(), 
@@ -176,7 +183,7 @@ def get_launch_info():
         return mnist_classification_metriclearning_lunch_info  
 
     elif CURRENT_PARAMS == 'cifar10_classification_metric_learning_per_sampl': 
-        mnist_classification_metriclearning_lunch_info = LaunchInfo(model=Cifar10ClassificationMetricLearningModel2(), 
+        mnist_classification_metriclearning_lunch_info = LaunchInfo(model=Cifar10ClassificationMetricLearningModelGlobal(), 
                                                                     loss=torch.nn.NLLLoss(), 
                                                                     optimizer=None, 
                                                                     scheduler=None, 
@@ -225,9 +232,10 @@ def get_launch_info():
                                                     add_info=ADD_INFO)
         return cifar10_metriclearning_lunch_info
 
-    elif CURRENT_PARAMS in ['cifar10_metric_learning_global']: 
+    elif CURRENT_PARAMS in ['cifar10_metric_learning_global', 'cifar10_metric_learning_global_basis']: 
         loader = get_cifar10_train_loader(1000, n_augments=-2, augment_labels=False)
-        centroids = get_cifar10_centroids(ADD_INFO['centroids_count'], loader)    
+        centroids = get_cifar10_centroids(ADD_INFO['centroids_count']*2, loader)
+        centroids = centroids[:ADD_INFO['centroids_count']]
         print(f'centroids count {centroids.size(0)}')
 
         cifar10_metriclearning_lunch_info = LaunchInfo(model=Cifar10MetricLearningNetCentroids(), 
@@ -237,7 +245,8 @@ def get_launch_info():
                                                     scheduler=None, 
                                                     train_loader=get_cifar10_train_global_loader(batch_size=BATCH_SIZE, 
                                                                                                  centroids=centroids, 
-                                                                                                 n_augments=N_AUGMENTS),
+                                                                                                 n_augments_centroids=N_AUGMENTS,
+                                                                                                 n_augments_images=ADD_INFO['n_augs_imgs']),
                                                     test_loader=get_cifar10_test_global_loader(batch_size=BATCH_SIZE, 
                                                                                                centroids=centroids),
                                                     epochs=EPOCHS, 
@@ -268,7 +277,7 @@ def get_launch_info():
         return mnist_domyshnik_lunch_info   
 
     elif CURRENT_PARAMS == 'cifar10_domyshnik':
-        cifar10_domyshnik_lunch_info = LaunchInfo(model=Cifar10DomyshnikNetNet(), 
+        cifar10_domyshnik_lunch_info = LaunchInfo(model=Cifar10DomyshnikNetNetCentroids(),#Cifar10DomyshnikNetNet(), 
                                                     loss=ContrastiveLoss(margin=MARGING, 
                                                                          pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
                                                     optimizer=None, 

@@ -237,7 +237,6 @@ class Learner:
                                        })
 
                 elif self.mode == 'domyshnik':
-
                     labels, old_labels, rewards = labels[0], labels[1], labels[2]
                     # refresh rewards according new strategy
                     if self.copy_model is not None:
@@ -253,7 +252,8 @@ class Learner:
                     p0_labels = labels.view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
                     labels = torch.arange(int(out.size(0)/(N_AUGMENTS + 1))).view(1, -1).repeat(N_AUGMENTS+1, 1).transpose(0, 1).flatten().to(self.device)
 
-                    loss_pos, loss_neg = self.loss(F.softmax(out, dim=-1), labels)
+                    loss_pos, loss_neg = self.loss(F.softmax(out, dim=-1), labels) # in kl div we apply log_softmax
+                    #loss_pos, loss_neg = self.loss(out, labels)
                     losses_pos.append(loss_pos.item())
                     losses_neg.append(loss_neg.item())
                     loss_pos_val = self.running_average(losses_pos)

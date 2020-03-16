@@ -175,13 +175,19 @@ class Cifar10MetricLearningNetCentroids(nn.Module):
             L2Normalization()
         ])
 
+        self.centroids = nn.Parameter(torch.randn(ADD_INFO['centroids_count'], 256))
+
 
     def forward(self, x):
-        #x = x.view(-1, 3, x.size(-2), x.size(-1)) # b, augs, 3, x, y -> b*augs, 3, x, y
+        if len(x.size()) == 5: # with augmentation
+            x = x.view(-1, 3, x.size(-2), x.size(-1)) # b, augs, 3, x, y -> b*augs, 3, x, y
         x = self.w(x)
         x = self.head(x)
 
         return x
+
+    def set_centroids(self, centroids):
+        self.centroids = nn.Parameter(centroids)
 
 # --------------------------------------------------------------------------------------------------
 
@@ -247,6 +253,45 @@ class Cifar10ClassificationMetricLearningModel2(nn.Module):
             x = x.unsqueeze(1)
         x = self.metric_learn_model(x)
         x = self.fc1(x)
+        output = F.log_softmax(x, dim=1)
+        return output
+
+class Cifar10ClassificationMetricLearningModelGlobal(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.metric_learn_model = get_cifar10_centroids_model(15)
+        self.metric_learn_model.train()
+        for param in self.metric_learn_model.parameters():
+            param.requires_grad = False
+
+        #self.fc1 = nn.Linear(1000, 10)
+        self.fc1 = nn.Linear(256, 1024)
+        self.d1 = nn.Dropout(0.7)
+
+        self.fc2 = nn.Linear(1024, 512)
+        self.d2 = nn.Dropout(0.5)
+
+        self.fc3 = nn.Linear(512, 10)
+
+    def forward(self, x):
+        if len(x.size()) == 5: # b, n_augs, c=3 , w, h
+            x = x[:, -1, :, :, :].unsqueeze(1) # get augmented image
+        else: # b, c=3 , w, h
+            x = x.unsqueeze(1)
+
+        x = self.metric_learn_model(x)
+
+        x = self.fc1(x)
+        x = self.d1(x)
+        x = F.relu(x)
+
+        x = self.fc2(x)
+        x = self.d2(x)
+        x = F.relu(x)
+
+        x = self.fc3(x)
+
         output = F.log_softmax(x, dim=1)
         return output
 
@@ -350,6 +395,37 @@ class Cifar10DomyshnikNetNet(nn.Module):
         for param in self.metric_learn_model.parameters():
             param.requires_grad = True
 
+class Cifar10DomyshnikNetNetCentroids(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.metric_learn_model = get_cifar10_centroids_model(19)
+        self.metric_learn_model.train()
+        for param in self.metric_learn_model.parameters():
+            param.requires_grad = False
+        self.dropout_base = nn.Dropout(0.25)
+
+        self.fc0 = nn.Linear(256, 64)
+        self.dropout0 = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(64, 10)
+
+    def forward(self, x):
+        x = x.view(-1, 3, x.size(-2), x.size(-1)) # b, augs, 3, x, y -> b*augs, 3, x, y
+        x = self.metric_learn_model(x)
+        x = self.dropout_base(x)
+        x = F.relu(x)
+
+        x = self.fc0(x)
+        x = self.dropout0(x)
+        x = F.relu(x)
+
+        x = self.fc1(x)
+        x = F.log_softmax(x, dim=1)
+        return x
+
+    def allow_grads(self):
+        for param in self.metric_learn_model.parameters():
+            param.requires_grad = True
+
 # --------------------------------------------------------------------------------------------------
 
 def save_model_params(model, model_name):
@@ -390,3 +466,20 @@ def get_cifar10_metriclearning_persample_model():
 def get_cifar10_metriclearning_persample_model_cated():
     model = Cifar10MetricLearningNet3()
     return load_model_params(model, 'cifar10_metric_learning.w', 'cifar10_per_sampl_hinton_150_centroids')
+
+def get_cifar10_centroids_model(epoch):
+    model = Cifar10MetricLearningNetCentroids()#cifar10_global_c50_caug5_iaug2_cmrg03_imrg01
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global')
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_1')
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_2')
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c50_caug5_iaug2_cmrg03_imrg01')
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c50_caug5_iaug2_cmrg03_imrg01_v2')
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c50_caug5_iaug5_cmrg03_imrg025')
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c150_caug5_iaug5_cmrg05_imrg05')
+
+    # not bad variant
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c150_caug5_iaug5_cmrg05_imrg05_v2')
+
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c150_caug5_iaug5_cmrg05_imrg01_basis')
+    return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c100_caug5_iaug5_cmrg05_imrg01_basis')
+    

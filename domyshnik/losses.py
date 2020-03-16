@@ -5,6 +5,77 @@ from dltranz.metric_learn.sampling_strategies import HardNegativePairSelector
 torch.autograd.set_detect_anomaly(True)
 from dltranz.metric_learn.ml_models import L2Normalization
 
+def outer_pairwise_distance(A, B=None):
+    """
+        Compute pairwise_distance of Tensors
+            A (size(A) = n x d, where n - rows count, d - vector size) and
+            B (size(A) = m x d, where m - rows count, d - vector size)
+        return matrix C (size n x m), such as C_ij = distance(i-th row matrix A, j-th row matrix B)
+
+        if only one Tensor was given, computer pairwise distance to itself (B = A)
+    """
+
+    if B is None: B = A
+
+    max_size = 2 ** 26
+    n = A.size(0)
+    m = B.size(0)
+    d = A.size(1)
+
+    if n * m * d <= max_size or m == 1:
+
+        return torch.pairwise_distance(
+            A[:, None].expand(n, m, d).reshape((-1, d)),
+            B.expand(n, m, d).reshape((-1, d))
+        ).reshape((n, m))
+
+    else:
+
+        batch_size = max(1, max_size // (n * d))
+        batch_results = []
+        for i in range((m - 1) // batch_size + 1):
+            id_left = i * batch_size
+            id_rigth = min((i + 1) * batch_size, m)
+            batch_results.append(outer_pairwise_distance(A, B[id_left:id_rigth]))
+
+        return torch.cat(batch_results, dim=1)
+
+
+def outer_cosine_similarity(A, B=None):
+    """
+        Compute cosine_similarity of Tensors
+            A (size(A) = n x d, where n - rows count, d - vector size) and
+            B (size(A) = m x d, where m - rows count, d - vector size)
+        return matrix C (size n x m), such as C_ij = cosine_similarity(i-th row matrix A, j-th row matrix B)
+
+        if only one Tensor was given, computer pairwise distance to itself (B = A)
+    """
+
+    if B is None: B = A
+
+    max_size = 2 ** 32
+    n = A.size(0)
+    m = B.size(0)
+    d = A.size(1)
+
+    if n * m * d <= max_size or m == 1:
+
+        A_norm = torch.div(A.transpose(0, 1), A.norm(dim=1)).transpose(0, 1)
+        B_norm = torch.div(B.transpose(0, 1), B.norm(dim=1)).transpose(0, 1)
+        return torch.mm(A_norm, B_norm.transpose(0, 1))
+
+    else:
+
+        batch_size = max(1, max_size // (n * d))
+        batch_results = []
+        for i in range((m - 1) // batch_size + 1):
+            id_left = i * batch_size
+            id_rigth = min((i + 1) * batch_size, m)
+            batch_results.append(outer_cosine_similarity(A, B[id_left:id_rigth]))
+
+        return torch.cat(batch_results, dim=1)
+
+
 class ContrastiveLoss(nn.Module):
     """
     Contrastive loss
@@ -25,12 +96,15 @@ class ContrastiveLoss(nn.Module):
         positive_pairs, negative_pairs = self.pair_selector.get_pairs(embeddings, target)
         positive_loss = F.pairwise_distance(embeddings[positive_pairs[:, 0]], embeddings[positive_pairs[:, 1]]).pow(2)
 
-        positive_loss = (F.relu(positive_loss - self.margin * self.kpos)).sum()
+        tmp = positive_loss.sum() / positive_loss.size(0)
+        #positive_loss = (F.relu(positive_loss - self.margin * self.kpos)).sum()
+        positive_loss = positive_loss.sum()
         
         negative_loss = F.relu(
             self.margin * self.kneg - F.pairwise_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
         ).pow(2).sum()
         
+        #print(f'average distance beetween augments {tmp.item()}')
         return positive_loss, negative_loss
 
     def step(self, gamma_pos=1, gamma_neg=1):
@@ -59,6 +133,7 @@ class ContrastiveLossOriginal(nn.Module):
         positive_pairs, negative_pairs = self.pair_selector.get_pairs(embeddings, target)
         positive_loss = F.pairwise_distance(embeddings[positive_pairs[:, 0]], embeddings[positive_pairs[:, 1]]).pow(2)
 
+        #positive_loss = (F.relu(positive_loss - self.margin)).sum()
         positive_loss = positive_loss.sum()
         
         negative_loss = F.relu(
@@ -216,8 +291,9 @@ class InClusterisationLoss(nn.Module):
 
         centers = centroids
                 
-        # distances to each centroid (cosine)
-        D = torch.matmul(centers, embeddings.transpose(0, 1)) # KxN
+        # distances to each centroid
+        #D = torch.matmul(centers, embeddings.transpose(0, 1)) # KxN, (cosine)
+        D = outer_pairwise_distance(centers, embeddings) # KxN, (l2)
 
         # mask
         centr_idx = torch.argmin(D, dim=0).detach()
@@ -227,8 +303,29 @@ class InClusterisationLoss(nn.Module):
         Dmasked = D * centr_mask
 
         # in cluster distance
-        in_cluster_dist = -1 * torch.div(Dmasked.sum(-1), weights).sum()/K # -1 - because cosine distance
+        in_cluster_dist =  torch.div(Dmasked.sum(-1), weights).sum()/K # *-1 for cosine distance
 
-        return in_cluster_dist
+        # centroid's sphere radius estimation and elements count
+        centroids_radius = Dmasked.max(-1)[0].mean()
+        centroids_elements_count = centr_mask.sum(-1).float().mean()
+
+        return in_cluster_dist, centroids_radius, centroids_elements_count
 
 
+class BasisClusterisationLoss(nn.Module):
+
+    def __init__(self, device):
+        super(BasisClusterisationLoss, self).__init__()
+        self.device = device
+        self.norm = L2Normalization()
+
+    # embeddings: Nxd, centroids: Kxd
+    def forward(self, embeddings, centroids):
+        # distances to each centroid
+        coefs = outer_cosine_similarity(embeddings, centroids) # NxK
+
+        # entropy
+        H = -1 * F.softmax(coefs, dim=-1) * F.log_softmax(coefs, dim=-1)
+        H = H.sum()
+
+        return H, coefs
