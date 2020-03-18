@@ -43,8 +43,9 @@
     "norm_scores": false,
     "score_metric": "auroc",
 
-    "pretrained_model_path": "models/transf_model.p",
-    "use_batch_norm": false
+    "pretrained_model_path": "models/transf_model.p",,
+    "only_encoder": true,
+    "use_batch_norm": true
   },
 
   "save_model": false,

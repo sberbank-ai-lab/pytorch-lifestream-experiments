@@ -85,7 +85,8 @@
 
   "save_model": true,
   "model_path": {
-    "model": "models/transf_model.p"
+    "model": "models/transf_model.p",
+    "only_encoder": false
   },
 
   "output": {

@@ -18,11 +18,20 @@ def load_model(conf):
     pretrained_model_path = conf['pretrained_model_path']
 
     pre_model = torch.load(pretrained_model_path)
-    if not isinstance(pre_model[0], TrxEncoder):
-        pre_model = pre_model[0]
-    trx_encoder = pre_model[0]
-    rnn_encoder = pre_model[1]
-    step_select_encoder = pre_model[2]
+    if conf['only_encoder']:
+        layers = [pre_model]
+    else:
+        if not isinstance(pre_model[0], TrxEncoder):
+            pre_model = pre_model[0]
+        trx_encoder = pre_model[0]
+        rnn_encoder = pre_model[1]
+        step_select_encoder = pre_model[2]
+
+        layers = [
+            trx_encoder,
+            rnn_encoder,
+            step_select_encoder,
+        ]
 
     model_type = conf['model_type']
     if model_type == 'rnn':
@@ -34,11 +43,6 @@ def load_model(conf):
 
     head_output_size = 1
 
-    layers = [
-        trx_encoder,
-        rnn_encoder,
-        step_select_encoder,
-    ]
     if conf['use_batch_norm']:
         layers.append(torch.nn.BatchNorm1d(input_size))
 

@@ -55,6 +55,8 @@ def prepare_embeddings(seq, conf):
         for e_name, e_params in conf['params.trx_encoder.embeddings'].items():
             feature_arrays[e_name] = feature_arrays[e_name].clip(0, e_params['in'] - 1)
 
+        feature_arrays['event_time'] = rec['event_time']
+
         rec['feature_arrays'] = feature_arrays
         yield rec
 

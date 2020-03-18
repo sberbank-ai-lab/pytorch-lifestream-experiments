@@ -31,6 +31,64 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
+class DateTimeEncoding(nn.Module):
+    """Use it as preliminary layer before TransformerSeqEncoder
+
+    """
+    def __init__(self, trx_encoder, hidden_size, div_term_mode, positions, time_shift=0.0, dropout=0.1):
+        super(DateTimeEncoding, self).__init__()
+        self.trx_encoder = trx_encoder
+        self.dropout = nn.Dropout(p=dropout)
+        self.positions = positions
+        assert positions in ('time', 'ordinal')
+        self.time_shift = time_shift
+
+        if div_term_mode == 'exp':
+            # 1 day is minimal period
+            div_term = 2 * math.pi * torch.exp(
+                torch.arange(0, hidden_size, 2).float() * (-math.log(10000.0) / hidden_size))
+        elif div_term_mode == 'time':
+            dim = hidden_size // 2
+            div_term = torch.zeros(dim)
+            periods = torch.tensor([1 / 24, 1, 7, 14, 30, 31, 365, 366, 1000])
+            if dim > len(periods):
+                dim = len(periods)
+            div_term[:len(periods)] = 2 * math.pi / periods[:dim]
+        else:
+            raise NotImplementedError(f'Unknown div_term_mode "{div_term_mode}"')
+
+        div_term = div_term.unsqueeze(0).unsqueeze(0)
+        self.register_buffer('div_term', div_term)
+
+    def forward(self, x: PaddedBatch):
+        """
+        z: B, T, H
+        """
+        z = self.trx_encoder(x)  # Z: B, T, H
+
+        # event_time = x.payload['event_time'].float()
+        # event_time = event_time.unsqueeze(2)  # B, T -> B, T, 1
+
+        if self.positions == 'time':
+            event_time = x.payload['event_time'].float()
+            event_time = event_time.unsqueeze(2)  # B, T -> B, T, 1
+        else:
+            event_time = x.payload['event_time']
+            event_time = torch.arange(event_time.size()[1], device=event_time.device).float()
+            event_time = event_time.unsqueeze(0).unsqueeze(2)  # B, T -> B, T, 1
+
+        if self.training and self.time_shift > 0.0:
+            event_time += torch.rand(event_time.size()[0], 1, 1, device=event_time.device) * self.time_shift
+
+        pe = torch.cat([
+            torch.sin(event_time * self.div_term),
+            torch.cos(event_time * self.div_term),
+        ], dim=2)
+        out = z.payload + pe
+        out = self.dropout(out)
+        return PaddedBatch(out, x.seq_lens)
+
+
 class TransformerSeqEncoder(nn.Module):
     def __init__(self, input_size, params):
         super().__init__()

@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.autograd import Function
 
 from dltranz.agg_feature_model import AggFeatureModel
-from dltranz.transf_seq_encoder import TransformerSeqEncoder
+from dltranz.transf_seq_encoder import TransformerSeqEncoder, DateTimeEncoding
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(script_dir, '../..'))
@@ -80,9 +80,13 @@ def transformer_model(params):
         inp_reshape = PerTransTransf(trx_size, enc_input_size)
         p = torch.nn.Sequential(p, inp_reshape)
 
+    if 'date_time_encoder' in params:
+        p = DateTimeEncoding(p, **params['date_time_encoder'])
+        logger.info('DateTimeEncoding included')
+
     e = TransformerSeqEncoder(enc_input_size, params['transf'])
     l = FirstStepEncoder()
-    layers = [p, e, l]
+    layers = [torch.nn.Sequential(p, e, l)]
 
     if params['use_normalization_layer']:
         layers.append(L2Normalization())
