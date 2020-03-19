@@ -1,10 +1,16 @@
+import logging
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from numpy.testing import assert_almost_equal
 
 from dltranz.cpc import CPCLossV2
+from dltranz.metric_learn.ml_models import L2Normalization
 from .metric import outer_cosine_similarity
+
+
+logger = logging.getLogger(__name__)
 
 
 class ContrastiveLoss(nn.Module):
@@ -189,6 +195,39 @@ class MarginLoss(torch.nn.Module):
         return loss.sum(), len(positive_pairs) + len(negative_pairs)
 
 
+class KLDLoss(torch.nn.Module):
+    def __init__(self, ml_loss, w1, norm):
+        super().__init__()
+        self.ml_loss = ml_loss
+
+        self.w0 = 1.0
+        self.w1 = w1
+
+        self.norm = norm
+        self.norm_f = L2Normalization() if self.norm else None
+
+    def forward(self, embeddings, target):
+        d = embeddings.size()[1] // 2
+
+        mu, logvar = embeddings[:, :d], embeddings[:, d:]
+
+        # reparameterize
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        z = mu + eps * std
+
+        if self.norm:
+            z = self.norm_f(z)
+
+        # original loss
+        ml_loss_v, cnt = self.ml_loss(z, target)
+
+        kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+        combine_loss = self.w0 * ml_loss_v + self.w1 * kld
+        return combine_loss, cnt
+
+
 def get_loss(params, sampling_strategy, kw_params=None):
     
     if params['train.loss'] == 'ContrastiveLoss':
@@ -243,6 +282,10 @@ def get_loss(params, sampling_strategy, kw_params=None):
         loss_fn = CPCLossV2(**kwargs)
     else:
         raise AttributeError(f'wrong loss "{params["train.loss"]}"')
+
+    if 'kld_loss' in params['train']:
+        logger.info('Use KLDLoss')
+        loss_fn = KLDLoss(loss_fn, **params['train.kld_loss'])
 
     def loss(*args, **kwargs):
         return loss_fn(*args, **kwargs)[0]
