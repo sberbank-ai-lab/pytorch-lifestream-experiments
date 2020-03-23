@@ -11,3 +11,4 @@ Task                                              |    top_k_recall    |  Accura
 **cifar10 domyshnik**                             |                    | **0.774**  | with unfreeze  metric learn mod|             **0.5**            |
 **cifar10 domyshnik**                             |                    | **0.813**  | with unfreeze  metric learn mod(centroids)|  **0.5**            |
 --------------------------------------------------|--------------------|------------|--------------------------------| -------------------------------|
+**okko domyshnik**                                |                    | **0.33/0.344**  |                                |         **0.5/0.1**            |

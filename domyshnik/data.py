@@ -4,6 +4,9 @@ from torchvision import transforms
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+import pickle
+from collections import defaultdict
+import ast
 
 from domyshnik.constants import *
 
@@ -39,6 +42,26 @@ def cifar10_test_dataset():
                                                target_transform=None, 
                                                download=True)
     return tmp
+
+def okko_metriclearn_datasets(n_augments):
+    with open(f'/mnt/data/molchanov/datasets/okko/rekko_challenge_rekko_challenge_2019/transactions_grouped.pkl', 'rb') as handle:
+        data = pickle.load(handle)
+        data = [d for d in data if d['len'] >= 30]
+        data = np.random.permutation(data)
+        
+        split_len = int(len(data)*0.7)
+        train_data, test_data = data[:split_len], data[:split_len]
+    return OkkoMetricLearnDataSet(train_data, n_augments), OkkoMetricLearnDataSet(test_data, n_augments)
+
+def okko_domyshnik_datasets(n_augments):
+    with open(f'/mnt/data/molchanov/datasets/okko/rekko_challenge_rekko_challenge_2019/transactions_grouped.pkl', 'rb') as handle:
+        data = pickle.load(handle)
+        data = [d for d in data if d['len'] >= 30]
+        data = np.random.permutation(data)
+        
+        split_len = int(len(data)*0.7)
+        train_data, test_data = data[:split_len], data[split_len:]
+    return OkkoDomyshnikDataSet(train_data, n_augments), OkkoDomyshnikDataSet(test_data, n_augments)
 
 # -------------------------------------------------------------------------------------------------
 
@@ -122,6 +145,49 @@ def cifa10_base_aug():
 
 def cifar10_normilise(img):
     return transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))(img) 
+
+def padded_collate_okko_metrlearn(batch):
+    
+    new_x = defaultdict(list)
+    lengths = []
+    for sample in batch:
+        for i, (feature_name, feature_augments_collection) in enumerate(sample.items()):
+            for augment_val in feature_augments_collection:
+                new_x[feature_name].append(augment_val)
+                if i == 0:
+                    lengths.append(augment_val.size(0))
+
+    lengths = torch.IntTensor(lengths)
+
+    out = {k: torch.nn.utils.rnn.pad_sequence(v, batch_first=True) for k, v in new_x.items()}
+
+    return PaddedBatch(out, lengths)
+
+def padded_collate_okko_domyshnik(batch):
+    
+    new_x = defaultdict(list)
+    lengths = []
+    for sample, _ in batch:
+        for i, (feature_name, feature_augments_collection) in enumerate(sample.items()):
+            for augment_val in feature_augments_collection:
+                new_x[feature_name].append(augment_val)
+                if i == 0:
+                    lengths.append(augment_val.size(0))
+
+    lst_true_lbls, lst_fake_labels, lst_rewards = [], [], []
+    for _, (true_lbls, fake_labels, rewards) in batch:
+        lst_true_lbls.append(true_lbls)
+        lst_fake_labels.append(fake_labels)
+        lst_rewards.append(rewards)
+    trues = torch.cat(lst_true_lbls, 0)
+    fakes = torch.cat(lst_fake_labels, 0)
+    rewards = torch.cat(lst_rewards, 0)
+
+    lengths = torch.IntTensor(lengths)
+
+    out = {k: torch.nn.utils.rnn.pad_sequence(v, batch_first=True) for k, v in new_x.items()}
+
+    return PaddedBatch(out, lengths), (trues, fakes, rewards)
 
 # -------------------------------------------------------------------------------------------------
 class MetrLearnDataset(torch.utils.data.Dataset):
@@ -217,6 +283,87 @@ class DataLoaderWrapper:
             yield data, centrs
 
 
+class OkkoMetricLearnDataSet(torch.utils.data.Dataset):
+
+    def __init__(self, data, n_augments):
+        self.data = data
+        self.n_augments = n_augments
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        rec = self.data[idx]['feature_arrays']
+        l = self.data[idx]['len']
+
+        def to_tensor(val, key):
+            if FEATURES[key]['type'] == 'cat':
+                return torch.LongTensor(val)
+            else:
+                return torch.FloatTensor(val)
+
+        x = defaultdict(list)
+        for _ in range(self.n_augments):
+            idx = torch.randint(0, 2, (l,)).bool()
+
+            for k in sorted(list(FEATURES.keys())):
+                tmp = to_tensor(rec[k], k)
+                tmp = tmp.masked_select(idx)
+                x[k].append(tmp[-125:])
+
+        return x
+
+
+class OkkoDomyshnikDataSet(torch.utils.data.Dataset):
+
+    def __init__(self, data, n_augments):
+        self.data = data
+        self.n_augments = n_augments
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        rec = self.data[idx]['feature_arrays']
+        l = self.data[idx]['len']
+
+        def to_tensor(val, key):
+            if FEATURES[key]['type'] == 'cat':
+                return torch.LongTensor(val)
+            else:
+                return torch.FloatTensor(val)
+
+        x = defaultdict(list)
+        n = 4
+        for _ in range(self.n_augments):
+            idx = torch.randint(0, 2, (l,)).bool()
+            idx[-n:] = False # don't take last 4 films they are for test
+
+            for k in sorted(list(FEATURES.keys())):
+                tmp = to_tensor(rec[k], k)
+                tmp = tmp.masked_select(idx)
+                x[k].append(tmp[-9:])
+
+        # target
+        y_idx = torch.zeros(l).bool()
+        y_idx[-n:] = True
+        tmp = to_tensor(rec['element_uid'], 'element_uid')
+        lbls = tmp.masked_select(y_idx)
+
+        true_lbls = lbls.expand(self.n_augments, lbls.size(0))
+        rewards = torch.Tensor([-1]*n)
+        if random.random() > ERROR_RATE:
+            fake_labels = torch.randperm(FEATURES['element_uid']['in'])[:n]
+            fake_labels = fake_labels.expand(self.n_augments, lbls.size(0))
+            
+            rewards = torch.Tensor([BAD_REWARD]*n)
+        else:
+            fake_labels = true_lbls
+        rewards = rewards.expand(self.n_augments, lbls.size(0))
+
+        return x, (true_lbls, fake_labels, rewards)
+
+
 def get_mnist_train_loader(batch_size, n_augments=4, augment_labels=False):
     data_train = MetrLearnDataset(dataset=mnist_train_dataset(), 
                             augmenter=mnist_torch_augmentation(p=1), 
@@ -295,7 +442,6 @@ def get_cifar10_train_global_loader(batch_size, centroids, n_augments_centroids,
 
     return train_loader
     
-
 def get_cifar10_test_global_loader(batch_size, centroids):
     data_test = MetrLearnDataset(dataset=cifar10_test_dataset(), 
                                   augmenter=cifar_torch_augmentation(p=1), 
@@ -326,3 +472,41 @@ def get_cifar10_centroids(count, loader):
 
     centroids = torch.cat(centroids, 0)
     return centroids
+
+def get_okko_metrlearn_loaders(batch_size, n_augments):
+    train_data, test_data = okko_metriclearn_datasets(n_augments=n_augments)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=16,
+        collate_fn=padded_collate_okko_metrlearn)
+
+    test_loader = torch.utils.data.DataLoader(
+        test_data,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=4,
+        collate_fn=padded_collate_okko_metrlearn)
+
+    return train_loader, test_loader
+
+def get_okko_domyshnik_loaders(batch_size, n_augments):
+    train_data, test_data = okko_domyshnik_datasets(n_augments=n_augments)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=16,
+        collate_fn=padded_collate_okko_domyshnik)
+
+    test_loader = torch.utils.data.DataLoader(
+        test_data,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=4,
+        collate_fn=padded_collate_okko_domyshnik)
+
+    return train_loader, test_loader

@@ -76,6 +76,40 @@ class HardNegativeKLDivPairSelector(PairSelector):
 
         return positive_pairs, negative_pairs
 
+class RandomNegativePairSelector(PairSelector):
+    """
+    Generates all possible possitive pairs given labels and
+         neg_count hardest negative example for each example
+    """
+    def __init__(self, neg_count = 1):
+        super(RandomNegativePairSelector, self).__init__()
+        self.neg_count = neg_count
+
+    def get_pairs(self, embeddings, labels):
+        
+        # construct matrix x, such as x_ij == 0 <==> labels[i] == labels[j]
+        n = labels.size(0)
+        x = labels.expand(n,n) - labels.expand(n,n).t()        
+            
+        # positive pairs
+        positive_pairs = torch.triu((x == 0).int(), diagonal = 1).nonzero()
+        
+        # hard negative minning
+        mat_distances = outer_pairwise_distance(embeddings.detach()) # pairwise_distance
+        
+        upper_bound = int((2*n) ** 0.5) + 1
+        mat_distances = ((upper_bound - mat_distances) * (x != 0).type(mat_distances.dtype)) # filter: get only negative pairs
+        
+        indices = (torch.randperm(mat_distances.size(0)*mat_distances.size(1))%mat_distances.size(1)).view(-1, mat_distances.size(1))[:self.neg_count, :]
+        indices.to(mat_distances.device)
+        
+        negative_pairs = torch.stack([
+            torch.arange(0,n, dtype = indices.dtype, device = indices.device).repeat(self.neg_count),
+            torch.cat(indices.unbind(dim = 0))
+        ]).t()
+
+        return positive_pairs, negative_pairs
+
 # ----------------------------------------------------------------------------------------------
 
 def get_sampling_strategy(params='HardNegativePair', neg_count=None):
@@ -85,14 +119,16 @@ def get_sampling_strategy(params='HardNegativePair', neg_count=None):
             'neg_count' : NEGATIVES_COUNT if neg_count is None else neg_count,
         }
         kwargs = {k:v for k,v in kwargs.items() if v is not None}
-        sampling_strategy = HardNegativePairSelector(**kwargs)
+        #sampling_strategy = HardNegativePairSelector(**kwargs)
+        sampling_strategy = RandomNegativePairSelector(**kwargs)
         return sampling_strategy
     elif params == 'HardNegativePairKlDiv':
         kwargs = {
             'neg_count' : NEGATIVES_COUNT if neg_count is None else neg_count,
         }
         kwargs = {k:v for k,v in kwargs.items() if v is not None}
-        sampling_strategy = HardNegativeKLDivPairSelector(**kwargs)
+        #sampling_strategy = HardNegativeKLDivPairSelector(**kwargs)
+        sampling_strategy = RandomNegativePairSelector(**kwargs)
         return sampling_strategy
     return None
 
@@ -233,7 +269,9 @@ def get_launch_info():
         return cifar10_metriclearning_lunch_info
 
     elif CURRENT_PARAMS in ['cifar10_metric_learning_global', 'cifar10_metric_learning_global_basis']: 
-        loader = get_cifar10_train_loader(1000, n_augments=-2, augment_labels=False)
+        #loader = get_cifar10_train_loader(1000, n_augments=-2, augment_labels=False)
+        # centroids will not be in train dataset
+        loader = get_cifar10_test_loader(1000, n_augments=-2, augment_labels=False)
         centroids = get_cifar10_centroids(ADD_INFO['centroids_count']*2, loader)
         centroids = centroids[:ADD_INFO['centroids_count']]
         print(f'centroids count {centroids.size(0)}')
@@ -295,4 +333,35 @@ def get_launch_info():
                                                     add_info=ADD_INFO)
         return cifar10_domyshnik_lunch_info
 
+    elif CURRENT_PARAMS == 'okko_metric_learning':
+        okko_train, okko_test = get_okko_metrlearn_loaders(BATCH_SIZE, N_AUGMENTS)
+        okko_metric_learnin_lunch_info = LaunchInfo(model=okko_metrlearn_model(), 
+                                                    loss=ContrastiveLoss(margin=MARGING, 
+                                                                         pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
+                                                    optimizer=None, 
+                                                    scheduler=None, 
+                                                    train_loader=okko_train, 
+                                                    test_loader=okko_test, 
+                                                    epochs=EPOCHS, 
+                                                    device=DEVICE,
+                                                    mode='metric_learning',
+                                                    model_name='okko.w',
+                                                    add_info=ADD_INFO)
+        return okko_metric_learnin_lunch_info
+
+    elif CURRENT_PARAMS == 'okko_domyshik':
+        okko_train, okko_test = get_okko_domyshnik_loaders(BATCH_SIZE, N_AUGMENTS)
+        okko_metric_learnin_lunch_info = LaunchInfo(model=okko_domyshnik_model(), 
+                                                    loss=ContrastiveLoss(margin=MARGING, 
+                                                                         pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
+                                                    optimizer=None, 
+                                                    scheduler=None, 
+                                                    train_loader=okko_train, 
+                                                    test_loader=okko_test, 
+                                                    epochs=EPOCHS, 
+                                                    device=DEVICE,
+                                                    mode='metric_learning',
+                                                    model_name='okko.w',
+                                                    add_info=ADD_INFO)
+        return okko_metric_learnin_lunch_info
                                              
