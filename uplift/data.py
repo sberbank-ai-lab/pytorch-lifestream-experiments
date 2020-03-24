@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 
-from domyshnik.constants import *
+from constants import *
 
 
 def mnist_train_dataset():
