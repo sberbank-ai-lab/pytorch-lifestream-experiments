@@ -124,7 +124,7 @@ class ignite_Recall_top_K(EpochMetric):
 
 
 class BatchRecallTop(Metric):
-    def __init__(self, k, metric='cosine'):
+    def __init__(self, k, metric='cosine', mu_only=False):
         super().__init__(output_transform=lambda x: x)
 
         self.num_value = 0.0
@@ -132,6 +132,7 @@ class BatchRecallTop(Metric):
 
         self.k = k
         self.metric = metric
+        self.mu_only = mu_only
 
     def reset(self):
         self.num_value = 0.0
@@ -141,6 +142,9 @@ class BatchRecallTop(Metric):
 
     def update(self, output):
         x, y = output
+        if self.mu_only:
+            dim = x.size()[1]
+            x = x[:, :dim // 2]
         value = metric_Recall_top_K(x, y, self.k, self.metric)
 
         self.num_value += value

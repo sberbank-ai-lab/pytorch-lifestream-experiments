@@ -44,7 +44,14 @@
       "margin": 0.5,
       "lr": 0.002,
       "weight_decay": 0.0,
-      "n_epoch": 100
+      "n_epoch": 100,
+      "checkpoints": {
+        "save_interval": 10,
+        "n_saved": 1000,
+        "dirname": "models/checkpoints/",
+        "filename_prefix": "mles",
+        "create_dir": true
+      }
     },
     "norm_scores": false,
     "valid": {

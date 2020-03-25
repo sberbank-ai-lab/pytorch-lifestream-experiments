@@ -72,6 +72,37 @@ def rnn_model(params):
     return m
 
 
+class Splitter(torch.nn.Module):
+    def __init__(self, embedding_size, strategy, transform_mu_out=None):
+        super().__init__()
+
+        self.strategy = strategy
+        if self.strategy == 'split':
+            pass
+        elif self.strategy == 'transform':
+            self.l1 = torch.nn.Linear(embedding_size, transform_mu_out * 2)
+        elif self.strategy == 'learn_sigma':
+            self.l1 = torch.nn.Linear(embedding_size, transform_mu_out)
+            self.logvar = torch.nn.Parameter(torch.randn(1, 1))
+        else:
+            raise NotImplementedError(f'Unknown strategy "{self.strategy}"')
+
+    def forward(self, x):
+        if self.strategy == 'split':
+            d = x.size()[1] // 2
+            mu, logvar = x[:, :d], x[:, d:]
+            out = torch.cat([mu, logvar], dim=1)
+        elif self.strategy == 'transform':
+            out = self.l1(x)
+        elif self.strategy == 'learn_sigma':
+            x = self.l1(x)
+            out = torch.cat([x, self.logvar.expand(*x.size())], dim=1)
+        else:
+            raise NotImplementedError(f'Unknown strategy "{self.strategy}"')
+
+        return out
+
+
 def transformer_model(params):
     p = TrxEncoder(params['trx_encoder'])
     trx_size = TrxEncoder.output_size(params['trx_encoder'])
@@ -86,10 +117,15 @@ def transformer_model(params):
 
     e = TransformerSeqEncoder(enc_input_size, params['transf'])
     l = FirstStepEncoder()
-    layers = [torch.nn.Sequential(p, e, l)]
+    encoder_layers = [p, e, l]
+    if 'splitter' in params:
+        encoder_layers.append(Splitter(embedding_size=enc_input_size, **params['splitter']))
+        logger.info('Splitter included')
+    layers = [torch.nn.Sequential(*encoder_layers)]
 
     if params['use_normalization_layer']:
         layers.append(L2Normalization())
+        logger.info('L2Normalization included')
     m = torch.nn.Sequential(*layers)
     return m
 

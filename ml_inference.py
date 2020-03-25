@@ -1,4 +1,5 @@
 import logging
+import os
 import pickle
 import numpy as np
 import torch
@@ -36,12 +37,20 @@ def read_dataset(path, conf):
 def main(args=None):
     conf = get_conf(args)
 
-    # model_f = ml_model_by_type(conf['params.model_type'])
-    # model = model_f(conf['params'])
-    # model_d = load_model(conf)
-    # model.load_state_dict(model_d)
+    model_path = conf['model_path.model']
+    if os.path.splitext(model_path)[1] == '.pth':
+        # load state_dict from checkpoint
+        model_f = ml_model_by_type(conf['params.model_type'])
+        model = model_f(conf['params'])
+        model_d = load_model(conf)
+        model.load_state_dict(model_d)
+        logger.info('Model loaded from checkpoint')
 
-    model = load_model(conf)
+        model = model[0] if conf['model_path.only_encoder'] else model
+    else:
+        # load full model
+        model = load_model(conf)
+        logger.info('Model loaded as full model')
 
     columns = conf['output.columns']
 

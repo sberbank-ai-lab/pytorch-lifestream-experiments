@@ -3,6 +3,7 @@
     "experiment": {
       "name": "default"
     },
+    "sample_train": 0,
     "device": "cuda",
     "model_type": "transf",
     "transf": {
@@ -58,7 +59,7 @@
       "lr": 0.001,
       "weight_decay": 0.0,
       "n_epoch": 90,
-      "# checkpoints": {
+      "checkpoints": {
         "save_interval": 15,
         "n_saved": 1000,
         "dirname": "models/checkpoints/",

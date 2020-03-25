@@ -196,7 +196,7 @@ class MarginLoss(torch.nn.Module):
 
 
 class KLDLoss(torch.nn.Module):
-    def __init__(self, ml_loss, w1, norm):
+    def __init__(self, ml_loss, w1, norm, is_sample):
         super().__init__()
         self.ml_loss = ml_loss
 
@@ -206,14 +206,20 @@ class KLDLoss(torch.nn.Module):
         self.norm = norm
         self.norm_f = L2Normalization() if self.norm else None
 
+        self.is_sample = is_sample
+
     def forward(self, embeddings, target):
         d = embeddings.size()[1] // 2
 
         mu, logvar = embeddings[:, :d], embeddings[:, d:]
 
-        # reparameterize
         std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
+        if self.is_sample:
+            # reparameterize
+            eps = torch.randn_like(std)
+        else:
+            eps = torch.zeros_like(std)
+
         z = mu + eps * std
 
         if self.norm:

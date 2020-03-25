@@ -72,6 +72,15 @@ def create_data_loaders(conf):
     train_data = [rec for i, rec in enumerate(data) if i not in valid_ix]
     valid_data = [rec for i, rec in enumerate(data) if i in valid_ix]
 
+    sample_train = conf['params.sample_train']
+
+    if sample_train > 0:
+        ix_for_sample = np.random.choice(len(train_data), sample_train, replace=False)
+        train_data = [rec for i, rec in enumerate(train_data) if i in ix_for_sample]
+        logger.info(f'Sampled {sample_train} records from train')
+    else:
+        logger.info('Full train used')
+
     logger.info(f'Train data len: {len(train_data)}, Valid data len: {len(valid_data)}')
 
     train_dataset = SplittingDataset(
@@ -130,7 +139,7 @@ def run_experiment(model, conf):
     sampling_strategy = get_sampling_strategy(params)
     loss = get_loss(params, sampling_strategy)
 
-    valid_metric = {'BatchRecallTop': BatchRecallTop(k=params['valid.split_strategy.split_count'] - 1)}
+    valid_metric = {'BatchRecallTop': BatchRecallTop(k=params['valid.split_strategy.split_count'] - 1, mu_only=True)}
     optimizer = get_optimizer(model, params)
     scheduler = get_lr_scheduler(optimizer, params)
 
