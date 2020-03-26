@@ -1,6 +1,7 @@
 import torch
 from torch.autograd import Variable
 from torch import nn
+import math
 
 
 class Encoder(nn.Module):
@@ -8,7 +9,7 @@ class Encoder(nn.Module):
         super().__init__()
         self.kernel_num = kernel_num
 
-        self.enc = nn.Sequential(
+        self.conv = nn.Sequential(
             conv_layer(channel_num, kernel_num // 4),
             conv_layer(kernel_num // 4, kernel_num // 2),
             conv_layer(kernel_num // 2, kernel_num),
@@ -25,7 +26,7 @@ class Encoder(nn.Module):
         self.project = linear_layer(z_size, self.feature_volume, relu=False)
 
     def forward(self, x):
-        encoded = self.enc(x)
+        encoded = self.conv(x)
 
         # sample latent code z from q given x.
         mean, logvar = self.q(encoded)
@@ -92,7 +93,6 @@ class VAE(nn.Module):
         # DI, device
         self.encoder.device = device
 
-
     def forward(self, x):
         # encode x
         z_projected, mean, logvar = self.encoder(x)
@@ -130,23 +130,23 @@ class VAE(nn.Module):
     """
     Layers
     """
-    def _conv(self, channel_size, kernel_num):
+    def _conv(self, in_channels, out_channels):
         return nn.Sequential(
             nn.Conv2d(
-                channel_size, kernel_num,
+                in_channels, out_channels,
                 kernel_size=4, stride=2, padding=1,
             ),
-            nn.BatchNorm2d(kernel_num),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(),
         )
 
-    def _deconv(self, channel_num, kernel_num):
+    def _deconv(self, in_channels, out_channels):
         return nn.Sequential(
             nn.ConvTranspose2d(
-                channel_num, kernel_num,
+                in_channels, out_channels,
                 kernel_size=4, stride=2, padding=1,
             ),
-            nn.BatchNorm2d(kernel_num),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(),
         )
 
@@ -155,3 +155,125 @@ class VAE(nn.Module):
             nn.Linear(in_size, out_size),
             nn.ReLU(),
         ) if relu else nn.Linear(in_size, out_size)
+
+
+class Layer(nn.Module):
+    def __init__(self, layers_arch, kernel_size, stride, padding):
+        """
+
+        :param layers_arch:
+        :param kernel_size:
+        :param stride:
+        :param padding:
+        """
+        super().__init__()
+        mlp_seq = []
+        for i in range(len(layers_arch) - 1):
+            mlp_seq.append(Layer._layer_block(layers_arch[i], layers_arch[i + 1], kernel_size, stride, padding))
+
+        self.mlp = nn.Sequential(
+            *mlp_seq
+        )
+
+    def forward(self, x):
+        return self.mlp(x)
+
+    @staticmethod
+    def _layer_block(in_channels, out_channels, kernel_size, stride, padding):
+        """
+
+        :param in_channels:
+        :param out_channels:
+        :param kernel_size:
+        :param stride:
+        :param padding:
+        :return:
+        """
+        raise NotImplemented
+
+    @staticmethod
+    def get_output_shape(img_size, padding, kernel_size, stride):
+        """
+        Compute output shape of conv2D
+
+        :param img_size:
+        :param padding:
+        :param kernel_size:
+        :param stride:
+        :return:
+        """
+        raise NotImplemented
+
+
+class Conv2DLayer(Layer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def _layer_block(in_channels, out_channels, kernel_size, stride, padding):
+        """
+
+        :param in_channels:
+        :param out_channels:
+        :param kernel_size:
+        :param stride:
+        :param padding:
+        :return:
+        """
+        return nn.Sequential(
+            nn.Conv2d(
+                in_channels, out_channels,
+                kernel_size=kernel_size, stride=stride, padding=padding,
+            ),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+        )
+
+    @staticmethod
+    def get_output_shape(img_size, padding, kernel_size, stride):
+        """
+        Compute output shape of conv2D
+
+        :param img_size:
+        :param padding:
+        :param kernel_size:
+        :param stride:
+        :return:
+        """
+        output_shape = (
+            math.floor((img_size[0] + 2 * padding[0] - (kernel_size[0] - 1) - 1) / stride[0] + 1).astype(int),
+            math.floor((img_size[1] + 2 * padding[1] - (kernel_size[1] - 1) - 1) / stride[1] + 1).astype(int)
+        )
+        return output_shape
+
+
+class Deconv2DLayer(Layer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def _layer_block(in_channels, out_channels, kernel_size, stride, padding):
+
+        return nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels, out_channels,
+                kernel_size=kernel_size, stride=stride, padding=padding,
+            ),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+        )
+
+    @staticmethod
+    def get_output_shape(img_size, padding, kernel_size, stride):
+        """
+        Compute output shape of conv2D
+
+        :param img_size:
+        :param padding:
+        :param kernel_size:
+        :param stride:
+        :return:
+        """
+        output_shape = ((img_size[0] - 1) * stride[0] - 2 * padding[0] + kernel_size[0],
+                    (img_size[1] - 1) * stride[1] - 2 * padding[1] + kernel_size[1])
+        return output_shape
