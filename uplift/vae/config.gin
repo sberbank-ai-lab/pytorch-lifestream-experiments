@@ -1,0 +1,40 @@
+# global params
+@image_size = (32, 32)
+@num_channels = 3
+@num_kernels = 4
+@z_size = 128
+@device = 'cuda:0'
+
+# conv layer const
+@kernel_size = 4
+@stride = 2
+@padding = 1
+
+# conv layer
+Conv2DLayer.layer_sizes = [@num_channels, @num_kernels // 4, @num_kernels // 2, @num_kernels]
+Conv2DLayer.img_size = @img_size
+Conv2DLayer.kernel_size = @kernel_size
+Conv2DLayer.stride = @stride
+Conv2DLayer.padding = @padding
+
+# deconv layer
+Deconv2DLayer.layer_sizes = [@num_kernels, @num_kernels // 2, @num_kernels // 4, @num_channels]
+Deconv2DLayer.img_size = @img_size
+Deconv2DLayer.kernel_size = @kernel_size
+Deconv2DLayer.stride = @stride
+Deconv2DLayer.padding = @padding
+
+# encoder
+Encoder.num_kernels = @num_kernels
+Encoder.z_size = @z_size
+Encoder.conv_layer = @Conv2DLayer
+Encoder.linear_layer = @LinearLayer
+
+# decoder
+Decoder.deconv_layer = @Deconv2DLayer
+
+# vae
+VAE.encoder = @Encoder
+VAE.decoder = @Decoder
+VAE.device = @device
+

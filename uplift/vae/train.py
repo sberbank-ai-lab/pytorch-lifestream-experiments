@@ -7,6 +7,7 @@ import sys
 sys.path.append('..')
 
 import data
+import gin
 
 
 def train_model(model,
@@ -116,13 +117,6 @@ def train_model(model,
 
 
 if __name__ == '__main__':
-    device = 'cuda:0'
-    model = models.VAE(
-        'label',
-        32,
-        3,
-        4,
-        128,
-        device
-    ).to(device)
+    # device = 'cuda:0'
+    model = models.VAE()
     train_model(model)
