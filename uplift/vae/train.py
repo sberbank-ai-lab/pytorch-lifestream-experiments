@@ -1,3 +1,4 @@
+import torch
 from torch import optim
 from torch.autograd import Variable
 from tqdm import tqdm
@@ -9,34 +10,26 @@ sys.path.append('..')
 import data
 import gin
 
-# gin.parse_config_file('config.gin')
+import cloudpickle
 
 
 @gin.configurable
 def train_model(model,
-                epochs=10,
-                batch_size=32,
-                sample_size=32,
-                lr=3e-04,
-                weight_decay=1e-5,
-                loss_log_interval=30,
-                image_log_interval=300,
-                checkpoint_dir='./checkpoints',
-                resume=False,
-                device='cuda:0'):
+                epochs,
+                batch_size,
+                sample_size,
+                lr,
+                weight_decay,
+                loss_log_interval,
+                model_save_path,
+                device):
+
     # prepare optimizer and model
     model.train()
     optimizer = optim.Adam(
         model.parameters(), lr=lr,
         weight_decay=weight_decay,
     )
-
-    '''
-    if resume:
-        epoch_start = utils.load_checkpoint(model, checkpoint_dir)
-    else:
-        epoch_start = 1
-    '''
 
     for epoch in range(epochs):
         data_loader = data.get_cifar10_train_loader(batch_size, n_augments=0)
@@ -88,38 +81,22 @@ def train_model(model,
                     kl_divergence_loss.item(),
                     total_loss.item()
                 ]
-                # print(losses)
-                names = ['reconstruction', 'kl divergence', 'total']
-                '''
-                visual.visualize_scalars(
-                    losses, names, 'loss',
-                    iteration, env=model.name)
-                '''
-            '''
-            if iteration % image_log_interval == 0:
-                images = model.sample(sample_size)
-                visual.visualize_images(
-                    images, 'generated samples',
-                    env=model.name
-                )
-            '''
 
-        '''
-        # notify that we've reached to a new checkpoint.
-        print()
-        print()
-        print('#############')
-        print('# checkpoint!')
-        print('#############')
-        print()
-
-        # save the checkpoint.
-        # utils.save_checkpoint(model, checkpoint_dir, epoch)
-        print()
-        '''
+    # torch.save(model, model_save_path, pickle_module=cloudpickle)
+    torch.save(model, model_save_path)
 
 
 if __name__ == '__main__':
     gin.parse_config_file('config.gin')
-    # model = models.VAE()
-    train_model()
+
+    linear = models.LinearLayer
+    conv = models.Conv2DLayer()
+    deconv = models.Deconv2DLayer()
+
+    encoder = models.Encoder(conv_layer=conv, linear_layer=linear)
+    decoder = models.Decoder(deconv_layer=deconv)
+
+    model = models.VAE(encoder, decoder)
+
+    train_model(model)
+

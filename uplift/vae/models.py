@@ -91,8 +91,8 @@ class VAE(nn.Module):
         # configurations
         super().__init__()
 
-        self.encoder = encoder().to(device)
-        self.decoder = decoder().to(device)
+        self.encoder = encoder.to(device)
+        self.decoder = decoder.to(device)
 
     def forward(self, x):
         # encode x

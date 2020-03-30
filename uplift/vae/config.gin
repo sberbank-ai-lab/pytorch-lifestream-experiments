@@ -1,5 +1,5 @@
 # global params
-image_size = [32, 32]
+image_size = 32
 num_channels = 3
 num_kernels = 4
 z_size = 128
@@ -12,7 +12,7 @@ padding = 1
 
 # conv layer
 Conv2DLayer.layer_sizes = [3, 1, 2, 4]
-Conv2DLayer.img_size = [32, 32]
+Conv2DLayer.img_size = [%image_size, %image_size]
 Conv2DLayer.kernel_size = %kernel_size
 Conv2DLayer.stride = %stride
 Conv2DLayer.padding = %padding
@@ -20,7 +20,7 @@ Conv2DLayer.padding = %padding
 # deconv layer
 # Deconv2DLayer.layer_sizes = [%num_kernels, %num_kernels*1/2, %num_kernels*1/4, %num_channels]
 Deconv2DLayer.layer_sizes = [4, 2, 1, 3]
-Deconv2DLayer.img_size = [32, 32]
+Deconv2DLayer.img_size = [%image_size, %image_size]
 Deconv2DLayer.kernel_size = %kernel_size
 Deconv2DLayer.stride = %stride
 Deconv2DLayer.padding = %padding
@@ -42,4 +42,12 @@ VAE.device = %device
 
 # train
 train_model.model = @VAE()
+train_model.epochs = 6
+train_model.batch_size = 32
+train_model.sample_size = 32
+train_model.lr = 3e-04
+train_model.weight_decay = 1e-5
+train_model.loss_log_interval = 30
+train_model.model_save_path = '/mnt/data/misev/models/up_vae.pt'
+train_model.device = %device
 
