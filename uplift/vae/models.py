@@ -20,11 +20,11 @@ class Encoder(nn.Module):
         self.conv_layer_out_shape = conv_layer_out_shape[0]*conv_layer_out_shape[1]
 
         # q
-        self.q_mean = linear_layer(self.conv_layer_out_shape, z_size, relu=False)
-        self.q_logvar = linear_layer(self.conv_layer_out_shape, z_size, relu=False)
+        self.q_mean = linear_layer(self.conv_layer_out_shape, z_size, is_relu=False)
+        self.q_logvar = linear_layer(self.conv_layer_out_shape, z_size, is_relu=False)
 
         # projection
-        self.project = linear_layer(z_size, self.conv_layer_out_shape, relu=False)
+        self.project = linear_layer(z_size, self.conv_layer_out_shape, is_relu=False)
 
     def forward(self, x):
         encoded = self.conv_layer(x)
@@ -32,15 +32,24 @@ class Encoder(nn.Module):
         # sample latent code z from q given x.
         mean, logvar = self.q(encoded)
         z = self.z(mean, logvar)
+        # TODO: review
+        '''
         z_projected = self.project(z).view(
             -1, self.num_kernels,
             self.conv_layer_out_shape,
             self.conv_layer_out_shape,
         )
+        '''
+        z_projected = self.project(z).view(
+            -1,
+            self.num_kernels,
+            4,
+            4
+        )
         return z_projected, mean, logvar
 
     def q(self, encoded):
-        unrolled = encoded.view(-1, self.feature_volume)
+        unrolled = encoded.view(-1, self.conv_layer_out_shape)
         return self.q_mean(unrolled), self.q_logvar(unrolled)
 
     def z(self, mean, logvar):
@@ -147,14 +156,10 @@ class BaseLayer(nn.Module):
         """
         raise NotImplemented
 
-    def get_output_shape(self, img_size, padding, kernel_size, stride):
+    def get_output_shape(self):
         """
         Compute output shape of conv2D
 
-        :param img_size:
-        :param padding:
-        :param kernel_size:
-        :param stride:
         :return:
         """
         raise NotImplemented
@@ -191,8 +196,8 @@ class Conv2DLayer(BaseLayer):
         :return:
         """
         output_shape = (
-            math.floor((self.img_size[0] + 2 * self.padding - (self.kernel_size - 1) - 1) / self.stride + 1).astype(int),
-            math.floor((self.img_size[1] + 2 * self.padding - (self.kernel_size - 1) - 1) / self.stride + 1).astype(int)
+            math.floor((self.img_size[0] + 2 * self.padding - (self.kernel_size - 1) - 1) / self.stride + 1),
+            math.floor((self.img_size[1] + 2 * self.padding - (self.kernel_size - 1) - 1) / self.stride + 1)
         )
         return output_shape
 
@@ -244,3 +249,6 @@ class LinearLayer(nn.Module):
 
     def forward(self, x):
         return self.mlp(x)
+
+
+# gin.parse_config_file('config.gin')

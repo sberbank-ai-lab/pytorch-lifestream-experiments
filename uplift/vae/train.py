@@ -9,7 +9,10 @@ sys.path.append('..')
 import data
 import gin
 
+# gin.parse_config_file('config.gin')
 
+
+@gin.configurable
 def train_model(model,
                 epochs=10,
                 batch_size=32,
@@ -117,6 +120,6 @@ def train_model(model,
 
 
 if __name__ == '__main__':
-    # device = 'cuda:0'
-    model = models.VAE()
-    train_model(model)
+    gin.parse_config_file('config.gin')
+    # model = models.VAE()
+    train_model()
