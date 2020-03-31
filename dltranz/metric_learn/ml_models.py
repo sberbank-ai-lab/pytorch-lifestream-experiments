@@ -6,10 +6,13 @@ import torch.nn as nn
 
 from torch.autograd import Function
 
+from dltranz.agg_feature_model import AggFeatureModel
+from dltranz.transf_seq_encoder import TransformerSeqEncoder
+
 script_dir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(script_dir, '../..'))
 
-from dltranz.seq_encoder import RnnEncoder, LastStepEncoder, NormEncoder
+from dltranz.seq_encoder import RnnEncoder, LastStepEncoder, PerTransTransf, FirstStepEncoder
 from dltranz.trx_encoder import TrxEncoder
 
 # TODO: is the same as dltranz.seq_encoder.NormEncoder
@@ -44,12 +47,56 @@ class BinarizationLayer(nn.Module):
 
 
 def rnn_model(params):
-    p = TrxEncoder(params['trx_encoder'])
-    e = RnnEncoder(TrxEncoder.output_size(params['trx_encoder']), params['rnn'])
-    l = LastStepEncoder()
-    n = L2Normalization()
-    m = torch.nn.Sequential(p, e, l, n)
+    layers = [
+        TrxEncoder(params['trx_encoder']),
+        RnnEncoder(TrxEncoder.output_size(params['trx_encoder']), params['rnn']),
+        LastStepEncoder(),
+    ]
+    if params['use_normalization_layer']:
+        layers.append(L2Normalization())
+    m = torch.nn.Sequential(*layers)
     return m
+
+
+def transformer_model(params):
+    p = TrxEncoder(params['trx_encoder'])
+    trx_size = TrxEncoder.output_size(params['trx_encoder'])
+    enc_input_size = params['transf']['input_size']
+    if enc_input_size != trx_size:
+        inp_reshape = PerTransTransf(trx_size, enc_input_size)
+        p = torch.nn.Sequential(p, inp_reshape)
+
+    e = TransformerSeqEncoder(enc_input_size, params['transf'])
+    l = FirstStepEncoder()
+    layers = [p, e, l]
+
+    if params['use_normalization_layer']:
+        layers.append(L2Normalization())
+    m = torch.nn.Sequential(*layers)
+    return m
+
+
+def agg_feature_model(params):
+    layers = [
+        torch.nn.Sequential(
+            AggFeatureModel(params['trx_encoder']),
+        ),
+        torch.nn.BatchNorm1d(AggFeatureModel.output_size(params['trx_encoder'])),
+    ]
+    if params['use_normalization_layer']:
+        layers.append(L2Normalization())
+    m = torch.nn.Sequential(*layers)
+    return m
+
+
+def ml_model_by_type(model_type):
+    model = {
+        'rnn': rnn_model,
+        'transf': transformer_model,
+        'agg_features': agg_feature_model,
+    }[model_type]
+    return model
+
 
 class ModelEmbeddingEnsemble(nn.Module):
     def __init__(self, submodels):
