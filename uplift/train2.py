@@ -22,8 +22,10 @@ class AverageLoss:
         if not isinstance(new_val, tuple):
             self.history.append(new_val.item())
             arr = np.array(self.history)[-self.window:]
-            res = np.convolve(arr, np.ones((arr.shape[0],)))/arr.shape[0]
-            return res[0]
+            res = arr.sum()/arr.shape[0]
+            return res
+            #res = np.convolve(arr, np.ones((arr.shape[0],)))/arr.shape[0]
+            #return res[0]
         else:
             if len(self.history) == 0:
                 for _ in new_val:
@@ -52,6 +54,10 @@ class LossesCalculator:
 
     def get_loss(self, loss_name):
         return self.losses[loss_name]
+
+    def remove_loss(self, loss_name):
+        self.losses.pop(loss_name, None)
+        self.losses_stat.pop(loss_name, None)
 
 
 class Learner:
@@ -83,6 +89,9 @@ class Learner:
             self.los_calc.add_loss(loss.to(self.device), loss_name)
         else:
             self.los_calc.add_loss(lambda x: x.item(), loss_name)
+
+    def remove_loss(self, loss_name):
+        self.los_calc.remove_loss(loss_name)
 
     def get_loss(self, loss_name):
         return self.los_calc.get_loss(loss_name)
@@ -229,7 +238,79 @@ class Learner:
 
     def test_metric_learning_global(self, data, itr, step):
         return ""
+
+    def traintest_okko_metric_learning(self, data, itr, step):
+        samples = data
+
+        embs = self.model(samples) #b*N_AUGMENTS, h
+        lbls = torch.arange(int(embs.size(0)/N_AUGMENTS)).view(1, -1).repeat(N_AUGMENTS, 1).transpose(0, 1).flatten().to(self.device)
+
+        # local metric learning loss
+        embs_los_pos, embs_los_neg = self.get_loss('ContrastiveLossOriginal')(embs, lbls)
+        embs_los_pos_val, embs_los_neg_val = self.update_loss('ContrastiveLossOriginal', (embs_los_pos, embs_los_neg))
+
+        # recall
+        embs_recal = metric_Recall_top_K(embs, lbls, N_AUGMENTS)
+
+        loss = embs_los_pos + embs_los_neg
+
+        return {
+            'REC': embs_recal,
+
+            'pos': embs_los_pos_val,
+            'neg': embs_los_neg_val,
+            
+        }, loss
     
+    def traintest_okko_domyshink(self, data, itr, step):
+        samples, (true_lbls, fake_labels, rewards) = data
+        true_lbls = true_lbls.to(self.device)
+        fake_labels = fake_labels.to(self.device)
+        rewards = rewards.to(self.device)
+
+        if itr == 0:
+            self.remove_loss('accuracy')
+            self.add_loss(None, 'accuracy')
+
+        embs = F.softmax(self.model(samples), -1) #b*N_AUGMENTS, num_classes
+        lbls = torch.arange(int(embs.size(0)/N_AUGMENTS)).view(1, -1).repeat(N_AUGMENTS, 1).transpose(0, 1).flatten().to(self.device)
+
+        # local metric learning loss
+        embs_los_pos, embs_los_neg = self.get_loss('ContrastiveLossOriginal')(embs, lbls)
+        embs_los_pos_val, embs_los_neg_val = self.update_loss('ContrastiveLossOriginal', (embs_los_pos, embs_los_neg))
+
+        # rewards loss
+        idx0 = torch.arange(embs.size(0)).expand(fake_labels.size(-1), embs.size(0)).transpose(0, 1).flatten().to(self.device)
+        idx1 = fake_labels.flatten()
+        topk = embs[idx0, idx1].view_as(rewards)
+        rewards_loss = (topk * rewards).sum()
+        rewards_loss_val = rewards_loss.item()
+
+        # accuracy
+        _, idx = embs.topk(dim=1, k=10, largest=True)
+        corrects = 0
+        A = idx.detach().cpu().numpy()
+        B = true_lbls.detach().cpu().numpy()
+        for x, y in zip(A, B):
+            corrects += 1 if np.intersect1d(x, y).shape[0] > 0 else 0
+        accuracy = float(corrects)/idx.size(0)
+        accuracy_val = self.update_loss('accuracy', torch.Tensor([accuracy]))
+
+        loss = (embs_los_pos + embs_los_neg) +\
+                rewards_loss
+
+        return {
+            'ACC': accuracy_val,
+            'acc': accuracy,
+            'cor/tot': f'{corrects}/{idx.size(0)}',
+
+            'rew': rewards_loss_val,
+
+            'pos': embs_los_pos_val,
+            'neg': embs_los_neg_val,
+            
+        }, loss
+
     def train_epoch(self, step):
         self.model.train()
         with tqdm.tqdm(total=len(self.train_loader)) as steps:
@@ -243,13 +324,20 @@ class Learner:
                 if CURRENT_PARAMS == 'cifar10_metric_learning_global_basis':
                     message, loss, centroids_embeddings = self.train_metric_learning_global_basis(data, itr, step)
 
+                if CURRENT_PARAMS == 'okko_metric_learning':
+                    message, loss = self.traintest_okko_metric_learning(data, itr, step)
+
+                if CURRENT_PARAMS == 'okko_domyshik':
+                    message, loss = self.traintest_okko_domyshink(data, itr, step)
+
                 loss.backward()
                 self.optimizer.step()
 
                 steps.set_postfix(message)
                 steps.update()
             
-            self.model.set_centroids(centroids_embeddings)
+            if CURRENT_PARAMS in ['cifar10_metric_learning_global', 'cifar10_metric_learning_global_basis']:
+                self.model.set_centroids(centroids_embeddings)
         
     def test_epoch(self, step):
         self.model.eval()
@@ -262,6 +350,11 @@ class Learner:
                         print(f'test not implemented for {CURRENT_PARAMS}')
                         break
                         #message = self.test_metric_learning_global(data, itr, step)
+                    if CURRENT_PARAMS == 'okko_metric_learning':
+                        message, _ = self.traintest_okko_metric_learning(data, itr, step)
+
+                    if CURRENT_PARAMS == 'okko_domyshik':
+                        message, loss = self.traintest_okko_domyshink(data, itr, step)
 
                     steps.set_postfix(message)
                     steps.update()
@@ -273,6 +366,7 @@ class Learner:
             self.scheduler.step()
 
             save_model_params(self.model, self.model_name + str(step + 1))
+            print('------------------------------------------------------')
 
 
 def main():

@@ -3,8 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os.path as osp
 import torchvision.models as tvm
+import numpy as np
 
 from dltranz.metric_learn.ml_models import L2Normalization
+import dltranz.trx_encoder as trx
+import dltranz.seq_encoder as sec
 from domyshnik.constants import *
 
 class MnistClassificationNet(nn.Module):
@@ -398,7 +401,7 @@ class Cifar10DomyshnikNetNet(nn.Module):
 class Cifar10DomyshnikNetNetCentroids(nn.Module):
     def __init__(self):
         super().__init__()
-        self.metric_learn_model = get_cifar10_centroids_model(19)
+        self.metric_learn_model = get_cifar10_centroids_model(48)
         self.metric_learn_model.train()
         for param in self.metric_learn_model.parameters():
             param.requires_grad = False
@@ -426,6 +429,86 @@ class Cifar10DomyshnikNetNetCentroids(nn.Module):
         for param in self.metric_learn_model.parameters():
             param.requires_grad = True
 
+# --------------------------------------------------------------------------------------------------
+
+class LogScaler(nn.Module):
+    def forward(self, x):
+        return x.abs().log1p() * x.sign()
+
+class OkkoEncoder(nn.Module):
+    def __init__(self):
+
+        super().__init__()
+        self.dev = torch.device(DEVICE)
+        self.log_scaler = LogScaler()
+
+        self.embeddings = nn.ModuleDict()
+        for emb_name, emb_props in FEATURES.items():
+            if emb_props['type'] == 'reg':
+                continue
+            self.embeddings[emb_name] = trx.NoisyEmbedding(
+                num_embeddings=emb_props['in'],
+                embedding_dim=emb_props['out'],
+                padding_idx=0,
+                max_norm=None,
+                noise_scale=0.01)
+
+    def forward(self, x: PaddedBatch):
+        processed = []
+        any_key = list(x.payload.keys())[0]
+        for k in range(len(x.payload[any_key])):
+            sample = []
+            for field_name, embed_layer in self.embeddings.items():
+                input = x.payload[field_name][k].to(self.dev)
+                sample.append(embed_layer(input.long()))
+
+            for emb_name, emb_props in FEATURES.items():
+                if emb_props['type'] == 'cat':
+                    continue
+                input = x.payload[emb_name][k].to(self.dev)
+                if emb_props['f'] == 'log':
+                    sample.append(self.log_scaler(input).view(-1, 1))
+                else:
+                    sample.append(input.view(-1, 1))
+
+            processed.append(torch.cat(sample, -1))
+
+        out = torch.stack(processed, 0)
+        return PaddedBatch(out, x.seq_lens.to(self.dev))
+
+    def get_outsize(self):
+        return int(np.array([o['out'] for o in FEATURES.values()]).sum())
+
+def okko_metrlearn_model():
+    config = {
+            'hidden_size': 256,
+            'type': 'gru',
+            'bidir': False,
+            'trainable_starter': 'static'
+        }
+
+    e = OkkoEncoder()
+    r = sec.RnnEncoder(input_size=e.get_outsize(), config=config)
+    l = sec.LastStepEncoder()
+    model = nn.Sequential(*[e, r, l])
+    return model
+
+def okko_domyshnik_model():
+    metric_learn_model = get_okko_metric_learn_model(epoch=15)
+    metric_learn_model.train()
+    for param in metric_learn_model.parameters():
+        param.requires_grad = False
+
+    model = nn.Sequential(*[
+        metric_learn_model,
+        nn.Dropout(0.25),
+        nn.Linear(256, 64),
+        nn.Dropout(0.5),
+        nn.Linear(64, FEATURES['element_uid']['in']),
+        nn.LogSoftmax(dim=-1)
+    ])
+    return model
+    
 # --------------------------------------------------------------------------------------------------
 
 def save_model_params(model, model_name):
@@ -481,5 +564,34 @@ def get_cifar10_centroids_model(epoch):
     #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c150_caug5_iaug5_cmrg05_imrg05_v2')
 
     #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c150_caug5_iaug5_cmrg05_imrg01_basis')
-    return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c100_caug5_iaug5_cmrg05_imrg01_basis')
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c100_caug5_iaug5_cmrg05_imrg01_basis')
+
+    # more centroids
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c500_caug5_iaug5_cmrg05_imrg02_v2')
+
+    # centroids from test dataset (take 46)
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c500_caug5_iaug5_cmrg05_imrg02_test_centroids')
+
+    #-----
+    # all loses torgether 
+    return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c500_caug5_iaug5_cmrg05_imrg02_test_centroids_alllosses')
+
+    # 10 centroids
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c10_caug5_iaug5_cmrg05_imrg02_test_centroids')
     
+    # 10 centroids all losses
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c10_caug5_iaug5_cmrg05_imrg02_test_centroids_alllosses')
+
+    # random neg
+    #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c10_caug5_iaug5_cmrg05_imrg02_test_centroids_random_neg')
+
+def get_okko_metric_learn_model(epoch):
+    model = okko_metrlearn_model()
+    return load_model_params(model, f'okko.w{epoch}', 'okko_metrlearn2')
+
+def get_okko_domyshnik_model(epoch):
+    model = okko_domyshnik_model()
+    return load_model_params(model, f'okko.w{epoch}', 'okko_domyshnik')
+
+# 10 10 49 32 44 59
+# 35 39 69 10 31 51  93 1

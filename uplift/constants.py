@@ -13,14 +13,62 @@ NUM_CLASSES = 10
 ADD_INFO = None
 BAD_REWARD = -0.8
 DEVICE = 'cuda'
-ERROR_RATE = 0.5
+ERROR_RATE = 0.1#0.5
 
 SAVE_MODELS = True
 #CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
 #CURRENT_PARAMS = 'cifar10_classification_metric_learning_per_sampl'
 #CURRENT_PARAMS = 'cifar10_domyshnik'
-CURRENT_PARAMS = 'cifar10_metric_learning_global'
+#CURRENT_PARAMS = 'cifar10_metric_learning_global'
 #CURRENT_PARAMS = 'cifar10_metric_learning_global_basis'
+#CURRENT_PARAMS = 'okko_metric_learning'
+CURRENT_PARAMS = 'okko_domyshik'
+
+ALL_FEATURES = {
+
+    'feature_1'          : {'type': 'reg', 'in': 1, 'out': 1, 'f': 'log'},
+    'feature_2'          : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
+    'feature_4'          : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
+    'feature_5'          : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
+    'watched_time'       : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
+    'duration'           : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
+    'purchase'           : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
+    'rent'               : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
+    'subscription'       : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
+
+    'consumption_mode'   : {'type': 'cat', 'in': 3, 'out': 2},
+    'device_type'        : {'type': 'cat', 'in': 8, 'out': 2},
+    'device_manufacturer': {'type': 'cat', 'in': 100, 'out': 4},
+    'feature_3'          : {'type': 'cat', 'in': 49, 'out': 4},
+    'video_type'         : {'type': 'cat', 'in': 3, 'out': 1},
+    #'element_uid'        : {'type': 'cat', 'in': 10200, 'out': 16},
+    'element_uid'        : {'type': 'cat', 'in': 15000, 'out': 16},
+}
+
+FEATURES = ALL_FEATURES
+
+FEATURES = {'element_uid'        : {'type': 'cat', 'in': 10200, 'out': 16},
+'rent'               : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
+    }
+
+class PaddedBatch:
+    def __init__(self, payload, length, add_info=None):
+        self._payload = payload
+        self._length = length
+        self._add_info = add_info
+
+    @property
+    def payload(self):
+        return self._payload
+
+    @property
+    def seq_lens(self):
+        return self._length
+
+    @property
+    def add_info(self):
+        return self._add_info
+
 
 class config_params:
 
@@ -155,7 +203,7 @@ PARAMS = {
         negatives_cnt=5,
         marging=0.5,
         step_size=5,
-        model_postfix='cifar10_global_c500_caug5_iaug5_cmrg05_imrg02_v2',
+        model_postfix='cifar10_global_c10_caug5_iaug5_cmrg05_imrg02_test_centroids_random_neg',
         device='cuda:0',
         add_info={  'centroids_count': 500,
                     'losses': [
@@ -164,6 +212,46 @@ PARAMS = {
                         {'name': 'ContrastiveLossOriginal_images', 'marging': 0.2, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
                         ],
                     'n_augs_imgs': 5
+                    }
+                    
+        ),
+
+    "okko_metric_learning": config_params(
+        n_augments=5,
+        lr=0.002,
+        gamma=0.9025,
+        batch_size=256,
+        epochs=15,
+        sampling_strategy='HardNegativePair',
+        negatives_cnt=5,
+        marging=0.5,
+        step_size=1,
+        model_postfix='okko_metrlearn2',
+        device='cuda:1',
+        add_info={  
+                    'losses': [
+                        {'name': 'ContrastiveLossOriginal', 'marging': 0.5, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        ],
+                    }
+                    
+        ),
+
+    "okko_domyshik": config_params(
+        n_augments=5,
+        lr=0.002,
+        gamma=0.9025,
+        batch_size=128,
+        epochs=15,
+        sampling_strategy='HardNegativePair',
+        negatives_cnt=5,
+        marging=0.5,
+        step_size=1,
+        model_postfix='okko_domyshnik',
+        device='cuda:2',
+        add_info={  
+                    'losses': [
+                        {'name': 'ContrastiveLossOriginal', 'marging': 0.1, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        ],
                     }
                     
         ),
@@ -218,7 +306,7 @@ PARAMS = {
                                          'k_pos' : 1,#1,#0.25*0.3, 
                                          'k_neg': 1,#1,#200*0.3, 
                                          'k_reward': 15,#15,
-                                         'centroids_count': 150,
+                                         'centroids_count': 500,
                                          'factor': 1})                                                                                                           
 }
 
