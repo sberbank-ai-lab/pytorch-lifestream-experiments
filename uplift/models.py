@@ -10,6 +10,9 @@ import dltranz.trx_encoder as trx
 import dltranz.seq_encoder as sec
 from uplift.constants import *
 
+import sys
+sys.path.insert(0, '../vae')
+
 class MnistClassificationNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -593,5 +596,10 @@ def get_okko_domyshnik_model(epoch):
     model = okko_domyshnik_model()
     return load_model_params(model, f'okko.w{epoch}', 'okko_domyshnik')
 
-# 10 10 49 32 44 59
-# 35 39 69 10 31 51  93 1
+def get_cifar10_vae_centers_model():
+    model = torch.load(f'/mnt/data/misev/models/up_vae.pt')
+    return model
+    model = nn.Sequential(*list(model.children())[:-1])
+    encoder = next(model.children())
+    encoder = nn.Sequential(*list(encoder.children())[:-2])
+    return encoder
