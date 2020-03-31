@@ -8,7 +8,7 @@ import numpy as np
 from dltranz.metric_learn.ml_models import L2Normalization
 import dltranz.trx_encoder as trx
 import dltranz.seq_encoder as sec
-from domyshnik.constants import *
+from uplift.constants import *
 
 class MnistClassificationNet(nn.Module):
     def __init__(self):

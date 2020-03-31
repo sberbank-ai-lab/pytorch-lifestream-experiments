@@ -8,7 +8,7 @@ import pickle
 from collections import defaultdict
 import ast
 
-from domyshnik.constants import *
+from uplift.constants import *
 
 
 def mnist_train_dataset():

@@ -1,10 +1,10 @@
 import torch
 import torch.nn.functional as F
-from domyshnik.models import * 
-from domyshnik.data import *
+from uplift.models import * 
+from uplift.data import *
 from dltranz.metric_learn.sampling_strategies import HardNegativePairSelector, PairSelector
-from domyshnik.constants import *
-from domyshnik.losses import *
+from uplift.constants import *
+from uplift.losses import *
 
 
 def outer_pairwise_kl_distance(A, B=None):

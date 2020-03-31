@@ -5,8 +5,8 @@ import torch
 import torch.nn.functional as F
 import tqdm
 import numpy as np
-from domyshnik.utils import *
-from domyshnik.constants import *
+from uplift.utils import *
+from uplift.constants import *
 from dltranz.metric_learn.metric import metric_Recall_top_K
 import copy
 
