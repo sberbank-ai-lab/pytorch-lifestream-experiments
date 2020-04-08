@@ -12,6 +12,7 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 
 from uplift.constants import *
 
+np.random.seed(15)
 
 def mnist_train_dataset():
     tmp = torchvision.datasets.MNIST('/mnt/data/molchanov/datasets/mnist', 
