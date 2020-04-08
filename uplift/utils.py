@@ -331,7 +331,26 @@ def get_launch_info():
                                                     mode='domyshnik',
                                                     model_name='cifar10_domushnik.w',
                                                     add_info=ADD_INFO)
-        return cifar10_domyshnik_lunch_info
+        return cifar10_domyshnik_lunch_info,
+
+    elif CURRENT_PARAMS == 'cifar10_vae_domyshnik':
+        cifar10_vae_domyshnik_lunch_info = LaunchInfo(model=Cifar10VAEDomyshnikNet(),
+                                                    loss=ContrastiveLoss(margin=MARGING, 
+                                                                         pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
+                                                    optimizer=None, 
+                                                    scheduler=None, 
+                                                    train_loader=get_cifar10_train_loader(batch_size=BATCH_SIZE, 
+                                                                                        n_augments=N_AUGMENTS,
+                                                                                        augment_labels=True), 
+                                                    test_loader=get_cifar10_test_loader(batch_size=BATCH_SIZE, 
+                                                                                    n_augments=N_AUGMENTS,
+                                                                                    augment_labels=True), 
+                                                    epochs=EPOCHS, 
+                                                    device=DEVICE,
+                                                    mode='domyshnik',
+                                                    model_name='cifar10_vae_domushnik.w',
+                                                    add_info=ADD_INFO)
+        return cifar10_vae_domyshnik_lunch_info
 
     elif CURRENT_PARAMS == 'okko_metric_learning':
         okko_train, okko_test = get_okko_metrlearn_loaders(BATCH_SIZE, N_AUGMENTS)
@@ -362,6 +381,38 @@ def get_launch_info():
                                                     device=DEVICE,
                                                     mode='metric_learning',
                                                     model_name='okko.w',
+                                                    add_info=ADD_INFO)
+        return okko_metric_learnin_lunch_info
+
+    elif CURRENT_PARAMS == 'criteo_metric_learning':
+        criteo_train, criteo_test = get_criteo_data_loaders(BATCH_SIZE, N_AUGMENTS)
+        okko_metric_learnin_lunch_info = LaunchInfo(model=criteo_metrlearn_model(), 
+                                                    loss=ContrastiveLoss(margin=MARGING, 
+                                                                         pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
+                                                    optimizer=None, 
+                                                    scheduler=None, 
+                                                    train_loader=criteo_train, 
+                                                    test_loader=criteo_test, 
+                                                    epochs=EPOCHS, 
+                                                    device=DEVICE,
+                                                    mode='metric_learning',
+                                                    model_name=f"criteo_{ADD_INFO['augment_type']}.w",
+                                                    add_info=ADD_INFO)
+        return okko_metric_learnin_lunch_info
+
+    elif CURRENT_PARAMS == 'criteo_domyshnik':
+        criteo_train, criteo_test = get_criteo_domyshnik_data_loaders(BATCH_SIZE, N_AUGMENTS, True)
+        okko_metric_learnin_lunch_info = LaunchInfo(model=criteo_domyshnik_model(), 
+                                                    loss=ContrastiveLoss(margin=MARGING, 
+                                                                         pair_selector=get_sampling_strategy(SAMPLING_STRATEGY)), 
+                                                    optimizer=None, 
+                                                    scheduler=None, 
+                                                    train_loader=criteo_train, 
+                                                    test_loader=criteo_test, 
+                                                    epochs=EPOCHS, 
+                                                    device=DEVICE,
+                                                    mode='domyshnik',
+                                                    model_name=f"criteo_{ADD_INFO['augment_type']}.w",
                                                     add_info=ADD_INFO)
         return okko_metric_learnin_lunch_info
                                              

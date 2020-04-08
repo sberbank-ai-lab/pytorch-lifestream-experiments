@@ -7,6 +7,8 @@ import random
 import pickle
 from collections import defaultdict
 import ast
+import pandas as pd
+from torch.distributions.multivariate_normal import MultivariateNormal
 
 from uplift.constants import *
 
@@ -63,6 +65,33 @@ def okko_domyshnik_datasets(n_augments):
         train_data, test_data = data[:split_len], data[split_len:]
     return OkkoDomyshnikDataSet(train_data, n_augments), OkkoDomyshnikDataSet(test_data, n_augments)
 
+def criteo_control_datasets():
+    df = pd.read_csv('/mnt/data/molchanov/datasets/criteo/criteo-uplift-v2.1.csv')
+    df_t = df[df['treatment'] == 1]
+
+    # zeros sampling
+    n0 = df_t[df_t['conversion'] == 0]['conversion'].values.shape[0]
+    n1 = df_t[df_t['conversion'] == 1]['conversion'].values.shape[0]
+    n = int((n0 + n1) * float(n1)/n0)
+    A = df_t[df_t['conversion'] == 0].values
+    zeros = A[np.random.choice(A.shape[0], n, replace=False), :]
+    zeros = pd.DataFrame(zeros, columns=df_t.columns)
+    ones = df_t[df_t['conversion'] == 1]
+    df_t = pd.concat((ones, zeros))
+
+    # split train test
+    B = df_t.values
+    idx = np.random.permutation(B.shape[0])
+    n_train = int(B.shape[0] * 0.7)
+    train, test = B[idx[:n_train], :], B[idx[n_train:], :] 
+    df_train = pd.DataFrame(train, columns=df_t.columns)
+    df_test  = pd.DataFrame(test, columns=df_t.columns)
+
+    y_train, y_test = df_train['conversion'].values, df_test['conversion'].values
+    df_train = df_train.drop(['visit', 'treatment', 'conversion'], axis=1).values
+    df_test = df_test.drop(['visit', 'treatment', 'conversion'], axis=1).values
+    
+    return df_train, y_train, df_test, y_test
 # -------------------------------------------------------------------------------------------------
 
 def mnist_torch_augmentation(p=1):
@@ -163,6 +192,25 @@ def padded_collate_okko_metrlearn(batch):
 
     return PaddedBatch(out, lengths)
 
+def padded_collate_criteo_metrlearn(batch):
+    
+    new_x = defaultdict(list)
+    lengths = []
+    targets = []
+    for sample, y in batch:
+        targets.append(y)
+        for i, (feature_name, feature_augments_collection) in enumerate(sample.items()):
+            for augment_val in feature_augments_collection:
+                new_x[feature_name].append(augment_val)
+                if i == 0:
+                    lengths.append(augment_val.size(0))
+
+    lengths = torch.IntTensor(lengths)
+
+    out = {k: torch.nn.utils.rnn.pad_sequence(v, batch_first=True) for k, v in new_x.items()}
+
+    return PaddedBatch(out, lengths), torch.LongTensor(targets)
+
 def padded_collate_okko_domyshnik(batch):
     
     new_x = defaultdict(list)
@@ -189,6 +237,31 @@ def padded_collate_okko_domyshnik(batch):
 
     return PaddedBatch(out, lengths), (trues, fakes, rewards)
 
+def padded_collate_criteo_rnn_domyshnik(batch):
+    
+    new_x = defaultdict(list)
+    lengths = []
+    for sample, _ in batch:
+        for i, (feature_name, feature_augments_collection) in enumerate(sample.items()):
+            for augment_val in feature_augments_collection:
+                new_x[feature_name].append(augment_val)
+                if i == 0:
+                    lengths.append(augment_val.size(0))
+
+    lst_true_lbls, lst_fake_labels, lst_rewards = [], [], []
+    for _, (true_lbls, fake_labels, rewards) in batch:
+        lst_true_lbls.append(true_lbls)
+        lst_fake_labels.append(fake_labels)
+        lst_rewards.append(rewards)
+    trues = torch.cat(lst_true_lbls, 0)
+    fakes = torch.cat(lst_fake_labels, 0)
+    rewards = torch.cat(lst_rewards, 0)
+
+    lengths = torch.IntTensor(lengths)
+
+    out = {k: torch.nn.utils.rnn.pad_sequence(v, batch_first=True) for k, v in new_x.items()}
+
+    return PaddedBatch(out, lengths), (trues, fakes, rewards)
 # -------------------------------------------------------------------------------------------------
 class MetrLearnDataset(torch.utils.data.Dataset):
     
@@ -216,7 +289,7 @@ class MetrLearnDataset(torch.utils.data.Dataset):
 
         if self.n_augments > 0:
             #imgs = [self.aug(img) for i in range(self.n_augments + 1)]
-            imgs = [self.base_aug(img)] + [self.aug(img) for i in range(self.n_augments)]
+            imgs = [self.base_aug(img)] + [self.aug(img) for i in range(self.n_augments - 1)]
             b_img = torch.stack(imgs).squeeze()
 
         elif self.n_augments == -1: # no augments, return original image
@@ -240,7 +313,6 @@ class MetrLearnDataset(torch.utils.data.Dataset):
             reward = -1.0 if lbl == new_lbl else BAD_REWARD
             return b_img, (new_lbl, lbl, reward)
         
-
 class DataLoaderWrapper:
 
     def __init__(self, base_loader, centroids, n_augments=0, augmenter=None):
@@ -282,7 +354,6 @@ class DataLoaderWrapper:
             centrs = self.get_centroids()
             yield data, centrs
 
-
 class OkkoMetricLearnDataSet(torch.utils.data.Dataset):
 
     def __init__(self, data, n_augments):
@@ -313,6 +384,106 @@ class OkkoMetricLearnDataSet(torch.utils.data.Dataset):
 
         return x
 
+class CriteoMetricLearnDataSet(torch.utils.data.Dataset):
+
+    def __init__(self, X, y, n_augments, augment_labels=False):
+        self.X = X
+        self.y = y
+        self.n_augments = n_augments
+        self.noise = None
+        self.augment_labels = augment_labels
+
+    def __len__(self):
+        return self.y.shape[0]
+
+    def augment(self, x):
+        if self.noise is None:
+            self.noise = MultivariateNormal(torch.zeros(x.size(0)), torch.eye(x.size(0))*0.05)
+        x += self.noise.sample()
+
+        # sub sample
+        while True:
+            codes = torch.arange(x.size(0))
+            mask = torch.bernoulli(0.75 * torch.ones(x.size(0))).bool()
+            mask[-1] = True # take exposure feature
+            if mask.int().sum() > 6:
+                break
+
+        mcodes = codes[mask]
+        mx = x[mask]
+
+        # random permute
+        perm = torch.randperm(mcodes.size(0))
+        tmp = mcodes[perm[0]].item()
+        mcodes[perm[0]] = mcodes[perm[1]]
+        mcodes[perm[1]] = tmp
+
+        tmp = mx[perm[0]].item()
+        mx[perm[0]] = mx[perm[1]]
+        mx[perm[1]] = tmp
+
+        return mx, mcodes
+
+    def __getitem__(self, idx):
+        rec = torch.Tensor(self.X[idx])
+        y = torch.LongTensor([self.y[idx]])
+
+        x = defaultdict(list)
+        for _ in range(self.n_augments):
+            rec_aug, codes = self.augment(rec)
+            x['codes'].append(codes)
+            x['features'].append(rec_aug)
+
+        if self.augment_labels:
+            if random.random() > ERROR_RATE:
+                return x, (1 - y, y, torch.Tensor([BAD_REWARD])) # augs, new_lbl, true_lbl, reward
+            else:
+                return x, (y, y, torch.Tensor([-1.0])) # augs, new_lbl, true_lbl, reward
+
+        return x, y
+
+class CriteoMetricLearnDataSet2(torch.utils.data.Dataset):
+
+    def __init__(self, X, y, n_augments, augment_labels=False):
+        self.X = X
+        self.y = y
+        self.n_augments = n_augments
+        self.noise = None
+        self.augment_labels = augment_labels
+
+    def __len__(self):
+        return self.y.shape[0]
+
+    def augment(self, x):
+        # noise
+        if self.noise is None:
+            self.noise = MultivariateNormal(torch.zeros(x.size(0)), torch.eye(x.size(0))*0.05)
+        x += self.noise.sample()
+
+        # sub sample
+        while True:
+            mask = torch.bernoulli(0.75 * torch.ones(x.size(0)))
+            mask[-1] = True # take exposure feature
+            if mask.int().sum() > 6:
+                break
+
+        x *= mask
+        return x
+
+    def __getitem__(self, idx):
+        rec = torch.Tensor(self.X[idx])
+        y = torch.LongTensor([self.y[idx]])
+
+        augs = [rec] + [self.augment(rec) for i in range(self.n_augments - 1)]
+        augs = torch.stack(augs, dim=0)
+
+        if self.augment_labels:
+            if random.random() > ERROR_RATE:
+                return augs, (y, 1 - y, torch.Tensor([BAD_REWARD])) # augs, true_lbl, new_lbl, reward
+            else:
+                return augs, (y, y, torch.Tensor([-1.0])) # augs, true_lbl, new_lbl, reward
+
+        return augs, y
 
 class OkkoDomyshnikDataSet(torch.utils.data.Dataset):
 
@@ -363,6 +534,75 @@ class OkkoDomyshnikDataSet(torch.utils.data.Dataset):
 
         return x, (true_lbls, fake_labels, rewards)
 
+def get_criteo_data_loaders(batch_size, n_augments, augment_labels=False):
+    x_train, y_train, x_test, y_test = criteo_control_datasets()
+    if ADD_INFO['augment_type'] == 'rnn':
+        print('use rnn dataset')
+        data_train = CriteoMetricLearnDataSet(x_train, y_train, n_augments)
+        data_test = CriteoMetricLearnDataSet(x_test, y_test, n_augments)
+
+        train_data_loader = torch.utils.data.DataLoader(data_train,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=16,
+                                            collate_fn=padded_collate_criteo_metrlearn)
+
+        test_data_loader = torch.utils.data.DataLoader(data_test,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=4,
+                                            collate_fn=padded_collate_criteo_metrlearn)
+    else:
+        print('use perceptron dataset')
+        data_train = CriteoMetricLearnDataSet2(x_train, y_train, n_augments)
+        data_test = CriteoMetricLearnDataSet2(x_test, y_test, n_augments)
+
+        train_data_loader = torch.utils.data.DataLoader(data_train,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=16)
+
+        test_data_loader = torch.utils.data.DataLoader(data_test,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=4)
+    
+    return train_data_loader, test_data_loader
+
+def get_criteo_domyshnik_data_loaders(batch_size, n_augments, augment_labels=False):
+    x_train, y_train, x_test, y_test = criteo_control_datasets()
+    if ADD_INFO['augment_type'] == 'rnn':
+        print('use rnn dataset')
+        data_train = CriteoMetricLearnDataSet(x_train, y_train, n_augments, augment_labels)
+        data_test = CriteoMetricLearnDataSet(x_test, y_test, n_augments, augment_labels)
+
+        train_data_loader = torch.utils.data.DataLoader(data_train,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=16,
+                                            collate_fn=padded_collate_criteo_rnn_domyshnik)
+
+        test_data_loader = torch.utils.data.DataLoader(data_test,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=4,
+                                            collate_fn=padded_collate_criteo_rnn_domyshnik)
+    else:
+        print('use perceptron dataset')
+        data_train = CriteoMetricLearnDataSet2(x_train, y_train, n_augments, augment_labels)
+        data_test = CriteoMetricLearnDataSet2(x_test, y_test, n_augments, augment_labels)
+
+        train_data_loader = torch.utils.data.DataLoader(data_train,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=16)
+
+        test_data_loader = torch.utils.data.DataLoader(data_test,
+                                            batch_size=batch_size,
+                                            shuffle=True,
+                                            num_workers=4)
+    
+    return train_data_loader, test_data_loader
 
 def get_mnist_train_loader(batch_size, n_augments=4, augment_labels=False):
     data_train = MetrLearnDataset(dataset=mnist_train_dataset(), 
@@ -374,7 +614,12 @@ def get_mnist_train_loader(batch_size, n_augments=4, augment_labels=False):
                                           batch_size=batch_size,
                                           shuffle=True,
                                           num_workers=16)
-    return train_data_loader
+
+    test_data_loader = torch.utils.data.DataLoader(data_test,
+                                              batch_size=batch_size,
+                                              shuffle=False,
+                                              num_workers=5)
+    return train_data_loader, test_data_loader
     
 def get_mnist_test_loader(batch_size, n_augments=4, augment_labels=False):
     data_test = MetrLearnDataset(dataset=mnist_test_dataset(), 
@@ -397,7 +642,7 @@ def get_cifar10_train_loader(batch_size, n_augments=4, augment_labels=False):
     train_data_loader = torch.utils.data.DataLoader(data_train,
                                           batch_size=batch_size,
                                           shuffle=True,
-                                          num_workers=16)
+                                          num_workers=1)
     return train_data_loader
     
 def get_cifar10_test_loader(batch_size, n_augments=4, augment_labels=False):

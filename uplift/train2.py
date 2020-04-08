@@ -261,12 +261,43 @@ class Learner:
             'neg': embs_los_neg_val,
             
         }, loss
+
+    def traintest_criteo_metric_learning(self, data, itr, step):
+        if itr == 0:
+            self.remove_loss('recall')
+            self.add_loss(None, 'recall')
+
+        samples, _ = data
+        if ADD_INFO['augment_type'] == 'perceptron':
+            samples = samples.to(self.device)
+
+        embs = self.model(samples) #b*N_AUGMENTS, h
+        lbls = torch.arange(int(embs.size(0)/N_AUGMENTS)).view(1, -1).repeat(N_AUGMENTS, 1).transpose(0, 1).flatten().to(self.device)
+
+        # local metric learning loss
+        embs_los_pos, embs_los_neg = self.get_loss('ContrastiveLossOriginal')(embs, lbls)
+        embs_los_pos_val, embs_los_neg_val = self.update_loss('ContrastiveLossOriginal', (embs_los_pos, embs_los_neg*100))
+
+        # recall
+        embs_recal = metric_Recall_top_K(embs, lbls, N_AUGMENTS)
+        embs_recal_val = self.update_loss('recall', torch.Tensor([embs_recal]))
+
+        loss = embs_los_pos + embs_los_neg
+
+        return {
+            'REC': embs_recal_val,
+
+            'pos': embs_los_pos_val,
+            'neg': embs_los_neg_val,
+            
+        }, loss
     
     def traintest_okko_domyshink(self, data, itr, step):
         samples, (true_lbls, fake_labels, rewards) = data
         true_lbls = true_lbls.to(self.device)
         fake_labels = fake_labels.to(self.device)
         rewards = rewards.to(self.device)
+        samples = samples.to(self.device)
 
         if itr == 0:
             self.remove_loss('accuracy')
@@ -311,6 +342,97 @@ class Learner:
             
         }, loss
 
+    def traintest_cifar10_vae_domyshink(self, data, itr, step):
+        samples, (true_lbls, fake_labels, rewards) = data
+        true_lbls = true_lbls.to(self.device)
+        fake_labels = fake_labels.to(self.device)
+        rewards = rewards.to(self.device)
+        samples = samples.to(self.device)
+
+        if itr == 0:
+            self.remove_loss('accuracy')
+            self.add_loss(None, 'accuracy')
+
+        embs = F.softmax(self.model(samples), -1) #b*N_AUGMENTS, num_classes
+        lbls = torch.arange(int(embs.size(0)/N_AUGMENTS)).view(1, -1).repeat(N_AUGMENTS, 1).transpose(0, 1).flatten().to(self.device)
+
+        # local metric learning loss
+        embs_los_pos, embs_los_neg = self.get_loss('ContrastiveLossOriginal')(embs, lbls)
+        embs_los_pos_val, embs_los_neg_val = self.update_loss('ContrastiveLossOriginal', (embs_los_pos, embs_los_neg))
+
+        # rewards loss
+        idx0 = lbls
+        idx1 = fake_labels.flatten().expand(N_AUGMENTS, fake_labels.size(-1)).transpose(0, 1).flatten()
+        piw = embs[idx0, idx1]
+        rewards_loss = (piw * rewards.expand(N_AUGMENTS, rewards.size(-1)).transpose(0, 1).flatten()).sum() / N_AUGMENTS
+        rewards_loss_val = rewards_loss.item()
+
+        # accuracy
+        pred = embs.argmax(dim=-1).detach()
+        true = true_lbls.expand(N_AUGMENTS, true_lbls.size(-1)).transpose(0, 1).flatten()
+        accuracy = (pred==true).int().sum().float()/true.size(0)
+        accuracy_val = self.update_loss('accuracy', torch.Tensor([accuracy]))
+
+        loss = (embs_los_pos + embs_los_neg) +\
+                rewards_loss
+
+        return {
+            'ACC': accuracy_val,
+
+            'rew': rewards_loss_val,
+
+            'pos': embs_los_pos_val,
+            'neg': embs_los_neg_val,
+            
+        }, loss
+
+    def traintest_criteo_domyshink(self, data, itr, step):
+        samples, (true_lbls, fake_labels, rewards) = data
+        true_lbls = true_lbls.to(self.device).view(-1)
+        fake_labels = fake_labels.to(self.device).view(-1)
+        rewards = rewards.to(self.device).view(-1)
+
+
+        if ADD_INFO['augment_type'] == 'perceptron':
+            samples = samples.to(self.device)
+
+        if itr == 0:
+            self.remove_loss('accuracy')
+            self.add_loss(None, 'accuracy')
+
+        embs = F.softmax(self.model(samples), -1) #b*N_AUGMENTS, num_classes
+        lbls = torch.arange(int(embs.size(0)/N_AUGMENTS)).view(1, -1).repeat(N_AUGMENTS, 1).transpose(0, 1).flatten().to(self.device)
+
+        # local metric learning loss
+        embs_los_pos, embs_los_neg = self.get_loss('ContrastiveLossOriginal')(embs, lbls)
+        embs_los_pos_val, embs_los_neg_val = self.update_loss('ContrastiveLossOriginal', (embs_los_pos, embs_los_neg))
+
+        # rewards loss
+        idx0 = lbls
+        idx1 = fake_labels.flatten().expand(N_AUGMENTS, fake_labels.size(-1)).transpose(0, 1).flatten()
+        piw = embs[idx0, idx1]
+        rewards_loss = (piw * rewards.expand(N_AUGMENTS, rewards.size(-1)).transpose(0, 1).flatten()).sum() / N_AUGMENTS
+        rewards_loss_val = rewards_loss.item()
+
+        # accuracy
+        pred = embs.argmax(dim=-1).detach()
+        true = true_lbls.expand(N_AUGMENTS, true_lbls.size(-1)).transpose(0, 1).flatten()
+        accuracy = (pred==true).int().sum().float()/true.size(0)
+        accuracy_val = self.update_loss('accuracy', torch.Tensor([accuracy]))
+
+        loss = (embs_los_pos + embs_los_neg) +\
+                rewards_loss
+
+        return {
+            'ACC': accuracy_val,
+
+            'rew': rewards_loss_val,
+
+            'pos': embs_los_pos_val,
+            'neg': embs_los_neg_val,
+            
+        }, loss
+
     def train_epoch(self, step):
         self.model.train()
         with tqdm.tqdm(total=len(self.train_loader)) as steps:
@@ -327,8 +449,17 @@ class Learner:
                 if CURRENT_PARAMS == 'okko_metric_learning':
                     message, loss = self.traintest_okko_metric_learning(data, itr, step)
 
-                if CURRENT_PARAMS == 'okko_domyshik':
+                if CURRENT_PARAMS in ['okko_domyshik']:
                     message, loss = self.traintest_okko_domyshink(data, itr, step)
+
+                if CURRENT_PARAMS in ['cifar10_vae_domyshnik']:
+                    message, loss = self.traintest_cifar10_vae_domyshink(data, itr, step)
+
+                if CURRENT_PARAMS in ['criteo_metric_learning']:
+                    message, loss = self.traintest_criteo_metric_learning(data, itr, step)
+
+                if CURRENT_PARAMS in ['criteo_domyshnik']:
+                    message, loss = self.traintest_criteo_domyshink(data, itr, step)
 
                 loss.backward()
                 self.optimizer.step()
@@ -338,6 +469,10 @@ class Learner:
             
             if CURRENT_PARAMS in ['cifar10_metric_learning_global', 'cifar10_metric_learning_global_basis']:
                 self.model.set_centroids(centroids_embeddings)
+
+            if 'allow_grads' in dir(self.model) and step > 1:
+                print('unfreeze base model')
+                self.model.allow_grads()
         
     def test_epoch(self, step):
         self.model.eval()
@@ -353,8 +488,17 @@ class Learner:
                     if CURRENT_PARAMS == 'okko_metric_learning':
                         message, _ = self.traintest_okko_metric_learning(data, itr, step)
 
-                    if CURRENT_PARAMS == 'okko_domyshik':
+                    if CURRENT_PARAMS in ['okko_domyshik']:
                         message, loss = self.traintest_okko_domyshink(data, itr, step)
+
+                    if CURRENT_PARAMS in ['cifar10_vae_domyshnik']:
+                        message, loss = self.traintest_cifar10_vae_domyshink(data, itr, step)
+
+                    if CURRENT_PARAMS in ['criteo_metric_learning']:
+                        message, loss = self.traintest_criteo_metric_learning(data, itr, step)
+
+                    if CURRENT_PARAMS in ['criteo_domyshnik']:
+                        message, loss = self.traintest_criteo_domyshink(data, itr, step)
 
                     steps.set_postfix(message)
                     steps.update()

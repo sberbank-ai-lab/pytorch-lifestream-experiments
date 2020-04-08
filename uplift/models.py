@@ -12,6 +12,21 @@ from uplift.constants import *
 
 import sys
 sys.path.insert(0, '../vae')
+#sys.path.insert(0, '/mnt/data/molchanov/vqvae')
+#from models.vqvae import *
+
+sys.path.insert(0, '/mnt/data/molchanov/PyTorch-VAE')
+from runmodels import get_model as get_pyvae
+
+
+
+class LambdaLayer(nn.Module):
+    def __init__(self, lambd):
+        super(LambdaLayer, self).__init__()
+        self.lambd = lambd
+    def forward(self, x):
+        return self.lambd(x)
+
 
 class MnistClassificationNet(nn.Module):
     def __init__(self):
@@ -432,6 +447,39 @@ class Cifar10DomyshnikNetNetCentroids(nn.Module):
         for param in self.metric_learn_model.parameters():
             param.requires_grad = True
 
+
+class Cifar10VAEDomyshnikNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.vae = get_cifar10_vqvae_model(2)
+        self.vae.train()
+        for param in self.vae.parameters():
+            param.requires_grad = False
+        self.dropout_base = nn.Dropout(0.25)
+
+        #self.fc0 = nn.Linear(8192, 64)
+        self.fc0 = nn.Linear(4096, 64)
+        self.dropout0 = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(64, 10)
+
+    def forward(self, x):
+        x = x.view(-1, 3, x.size(-2), x.size(-1)) # b, augs, 3, x, y -> b*augs, 3, x, y
+        x = self.vae(x)
+        x = self.dropout_base(x)
+        x = F.relu(x)
+
+        x = self.fc0(x)
+        x = self.dropout0(x)
+        x = F.relu(x)
+
+        x = self.fc1(x)
+        x = F.log_softmax(x, dim=1)
+        return x
+
+    def allow_grads(self):
+        for param in self.vae.parameters():
+            param.requires_grad = True
+
 # --------------------------------------------------------------------------------------------------
 
 class LogScaler(nn.Module):
@@ -482,6 +530,49 @@ class OkkoEncoder(nn.Module):
     def get_outsize(self):
         return int(np.array([o['out'] for o in FEATURES.values()]).sum())
 
+class CriteoEncoder(nn.Module):
+    def __init__(self):
+
+        super().__init__()
+        self.dev = torch.device(DEVICE)
+        self.log_scaler = LogScaler()
+        self.norm = L2Normalization()
+
+        self.embeddings = nn.ModuleDict()
+        for emb_name, emb_props in FEATURES.items():
+            if emb_props['type'] == 'reg':
+                continue
+            self.embeddings[emb_name] = trx.NoisyEmbedding(
+                num_embeddings=emb_props['in'],
+                embedding_dim=emb_props['out'],
+                padding_idx=0,
+                max_norm=None,
+                noise_scale=0.01)
+
+    def forward(self, x: PaddedBatch):
+        processed = []
+        any_key = list(x.payload.keys())[0]
+        for k in range(len(x.payload[any_key])):
+            input = x.payload['features'][k].to(self.dev)
+            if FEATURES['features']['f'] == 'log':
+                val = self.log_scaler(input)
+            elif FEATURES['features']['f'] == 'norm':
+                val = self.norm(input.view(1, -1)).view(-1)
+            else:
+                val = input
+            val = val.expand(FEATURES['codes']['out'], val.size(0)).transpose(0, 1)
+
+            input = x.payload['codes'][k].to(self.dev)
+            encodes = self.embeddings['codes'](input.long())
+            wencodes = encodes * val
+            processed.append(wencodes)
+
+        out = torch.stack(processed, 0)
+        return PaddedBatch(out, x.seq_lens.to(self.dev))
+
+    def get_outsize(self):
+        return FEATURES['codes']['out']
+
 def okko_metrlearn_model():
     config = {
             'hidden_size': 256,
@@ -493,7 +584,42 @@ def okko_metrlearn_model():
     e = OkkoEncoder()
     r = sec.RnnEncoder(input_size=e.get_outsize(), config=config)
     l = sec.LastStepEncoder()
-    model = nn.Sequential(*[e, r, l])
+    model = nn.Sequential(*[e, r, l, L2Normalization()])
+    return model
+
+def criteo_metrlearn_model():
+    if ADD_INFO['augment_type'] == 'rnn':
+        print('use rnn model')
+        config = {
+                'hidden_size': ADD_INFO['hiden_size'],
+                'type': 'gru',
+                'bidir': False,
+                'trainable_starter': 'static'
+            }
+
+        e = OkkoEncoder()
+        #e = CriteoEncoder()
+        r = sec.RnnEncoder(input_size=e.get_outsize(), config=config)
+        l = sec.LastStepEncoder()
+        model = nn.Sequential(*[e, r, l, 
+                                nn.Linear(ADD_INFO['hiden_size'], ADD_INFO['hiden_size']//2),
+                                L2Normalization()
+                                ])
+    else:
+        print('use perceptrom model')
+        model = nn.Sequential(*[
+            LambdaLayer(lambda x: x.view(-1, x.size(-1))),
+            nn.Linear(13, ADD_INFO['hiden_size']*2),
+            nn.BatchNorm1d(ADD_INFO['hiden_size']*2),
+            nn.ReLU(),
+
+            nn.Linear(ADD_INFO['hiden_size']*2, ADD_INFO['hiden_size']),
+            nn.BatchNorm1d(ADD_INFO['hiden_size']),
+            nn.ReLU(),
+
+            nn.Linear(ADD_INFO['hiden_size'], ADD_INFO['hiden_size']//8),
+            L2Normalization()
+        ])
     return model
 
 def okko_domyshnik_model():
@@ -508,6 +634,26 @@ def okko_domyshnik_model():
         nn.Linear(256, 64),
         nn.Dropout(0.5),
         nn.Linear(64, FEATURES['element_uid']['in']),
+        nn.LogSoftmax(dim=-1)
+    ])
+    return model
+
+def criteo_domyshnik_model():
+    metric_learn_model = get_criteo_metriclearn_model()
+    metric_learn_model.train()
+    for param in metric_learn_model.parameters():
+        param.requires_grad = False
+
+    model = nn.Sequential(*[
+        metric_learn_model,
+
+        nn.Dropout(0.25),
+        nn.Linear(ADD_INFO['hiden_size']//2, ADD_INFO['hiden_size']),
+        nn.BatchNorm1d(ADD_INFO['hiden_size']),
+        nn.ReLU(),
+
+        nn.Dropout(0.5),
+        nn.Linear(ADD_INFO['hiden_size'], 2),
         nn.LogSoftmax(dim=-1)
     ])
     return model
@@ -603,3 +749,42 @@ def get_cifar10_vae_centers_model():
     encoder = next(model.children())
     encoder = nn.Sequential(*list(encoder.children())[:-2])
     return encoder
+
+''' mode: 0 - z-e
+          1 - z_e convolved
+          2 - z_q
+          3 - whole vae
+'''
+def get_cifar10_vqvae_model(mode=0):
+    model = VQVAE(h_dim=128, res_h_dim=32, n_res_layers=2,
+                 n_embeddings=512, embedding_dim=64, beta=.25, save_img_embedding_map=False)
+    model.load_state_dict(torch.load('/mnt/data/molchanov/vqvae/results/vqvae_state_dict.pth'))
+
+    if mode == 0:
+        model = nn.Sequential(*list(model.children())[:-3])
+        model = nn.Sequential(*[
+            model,
+            LambdaLayer(LambdaLayer(lambda x: x.view(x.size(0), -1)))
+        ])
+
+    elif mode == 1:
+        model = nn.Sequential(*list(model.children())[:-2])
+        model = nn.Sequential(*[
+            model,
+            LambdaLayer(LambdaLayer(lambda x: x.view(x.size(0), -1)))
+        ])
+
+    elif mode == 2:
+        model = nn.Sequential(*list(model.children())[:-1])
+        model = nn.Sequential(*[
+            model,
+            LambdaLayer(LambdaLayer(lambda x: x[1].view(x[1].size(0), -1)))
+        ])
+
+    model.eval()
+    return model
+
+def get_criteo_metriclearn_model():
+    model = criteo_metrlearn_model()
+    model.load_state_dict(torch.load(f"/mnt/data/molchanov/models/criteo_metrlearn_criteo_{ADD_INFO['augment_type']}.w4"))
+    return model

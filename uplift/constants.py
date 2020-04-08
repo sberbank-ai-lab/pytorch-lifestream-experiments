@@ -13,7 +13,7 @@ NUM_CLASSES = 10
 ADD_INFO = None
 BAD_REWARD = -0.8
 DEVICE = 'cuda'
-ERROR_RATE = 0.1#0.5
+ERROR_RATE = 0.5
 
 SAVE_MODELS = True
 #CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
@@ -22,9 +22,12 @@ SAVE_MODELS = True
 #CURRENT_PARAMS = 'cifar10_metric_learning_global'
 #CURRENT_PARAMS = 'cifar10_metric_learning_global_basis'
 #CURRENT_PARAMS = 'okko_metric_learning'
-CURRENT_PARAMS = 'okko_domyshik'
+#CURRENT_PARAMS = 'okko_domyshik'
+#CURRENT_PARAMS = 'cifar10_vae_domyshnik'
+CURRENT_PARAMS = 'criteo_metric_learning'
+#CURRENT_PARAMS = 'criteo_domyshnik'
 
-ALL_FEATURES = {
+OKKO_FEATURES = {
 
     'feature_1'          : {'type': 'reg', 'in': 1, 'out': 1, 'f': 'log'},
     'feature_2'          : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
@@ -45,11 +48,12 @@ ALL_FEATURES = {
     'element_uid'        : {'type': 'cat', 'in': 15000, 'out': 16},
 }
 
-FEATURES = ALL_FEATURES
+RECCO_FEATURES = {
+    'features' : {'type': 'reg', 'in': 1, 'out': 1, 'f': 'norm'},
+    'codes'    : {'type': 'cat', 'in': 13, 'out': 4},
+}
 
-FEATURES = {'element_uid'        : {'type': 'cat', 'in': 10200, 'out': 16},
-'rent'               : {'type': 'reg', 'in': 1, 'out': 1, 'f': ''},
-    }
+FEATURES = RECCO_FEATURES
 
 class PaddedBatch:
     def __init__(self, payload, length, add_info=None):
@@ -256,6 +260,50 @@ PARAMS = {
                     
         ),
 
+    "criteo_metric_learning": config_params(
+        n_augments=5,
+        lr=0.002,
+        gamma=0.9025,
+        batch_size=128,
+        epochs=25,
+        sampling_strategy='HardNegativePair',
+        negatives_cnt=5,
+        marging=0.5,
+        step_size=1,
+        model_postfix='criteo_metrlearn',
+        device='cuda:0',
+        add_info={  
+                    'losses': [
+                        {'name': 'ContrastiveLossOriginal', 'marging': 0.5, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        ],
+                    'augment_type': 'perceptron',
+                    'hiden_size': 64
+                    },
+                    
+        ),
+
+    "criteo_domyshnik": config_params(
+        n_augments=5,
+        lr=0.002,
+        gamma=0.9025,
+        batch_size=128,
+        epochs=25,
+        sampling_strategy='HardNegativePair',
+        negatives_cnt=5,
+        marging=0.5,
+        step_size=1,
+        model_postfix='criteo_domyshnik',
+        device='cuda:1',
+        add_info={  
+                    'losses': [
+                        {'name': 'ContrastiveLossOriginal', 'marging': 0.1, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        ],
+                    'augment_type': 'perceptron',
+                    'hiden_size': 64
+                    },
+                    
+        ),
+
     "cifar10_metric_learning_global_basis": config_params(
         n_augments=5,
         lr=0.002,
@@ -307,7 +355,27 @@ PARAMS = {
                                          'k_neg': 1,#1,#200*0.3, 
                                          'k_reward': 15,#15,
                                          'centroids_count': 500,
-                                         'factor': 1})                                                                                                           
+                                         'factor': 1}),
+
+    "cifar10_vae_domyshnik": config_params(
+        n_augments=5,
+        lr=0.002,
+        gamma=0.9025,
+        batch_size=128,
+        epochs=15,
+        sampling_strategy='HardNegativePair',
+        negatives_cnt=5,
+        marging=0.5,
+        step_size=1,
+        model_postfix='okko_domyshnik',
+        device='cuda:0',
+        add_info={  
+                    'losses': [
+                        {'name': 'ContrastiveLossOriginal', 'marging': 0.1, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        ],
+                    }
+                    
+        ),                                                                                                            
 }
 
 cparams = PARAMS[CURRENT_PARAMS]
