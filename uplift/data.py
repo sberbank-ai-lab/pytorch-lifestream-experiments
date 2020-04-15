@@ -66,6 +66,16 @@ def okko_domyshnik_datasets(n_augments):
         train_data, test_data = data[:split_len], data[split_len:]
     return OkkoDomyshnikDataSet(train_data, n_augments), OkkoDomyshnikDataSet(test_data, n_augments)
 
+def okko_classification_datasets():
+    with open(f'/mnt/data/molchanov/datasets/okko/rekko_challenge_rekko_challenge_2019/transactions_grouped.pkl', 'rb') as handle:
+        data = pickle.load(handle)
+        data = [d for d in data if d['len'] >= 30]
+        data = np.random.permutation(data)
+        
+        split_len = int(len(data)*0.7)
+        train_data, test_data = data[:split_len], data[:split_len]
+    return OkkoClassificationDataSet(train_data), OkkoClassificationDataSet(test_data)
+
 def criteo_control_datasets():
     df = pd.read_csv('/mnt/data/molchanov/datasets/criteo/criteo-uplift-v2.1.csv')
     df_t = df[df['treatment'] == 1]
@@ -238,6 +248,28 @@ def padded_collate_okko_domyshnik(batch):
 
     return PaddedBatch(out, lengths), (trues, fakes, rewards)
 
+def padded_collate_okko_classification(batch):
+    
+    new_x = defaultdict(list)
+    lengths = []
+    for sample, _ in batch:
+        for i, (feature_name, feature_augments_collection) in enumerate(sample.items()):
+            for augment_val in feature_augments_collection:
+                new_x[feature_name].append(augment_val)
+                if i == 0:
+                    lengths.append(augment_val.size(0))
+
+    lst_lbls = []
+    for _, lbls in batch:
+        lst_lbls.append(lbls)
+    trues = torch.stack(lst_lbls, 0)
+
+    lengths = torch.IntTensor(lengths)
+
+    out = {k: torch.nn.utils.rnn.pad_sequence(v, batch_first=True) for k, v in new_x.items()}
+
+    return PaddedBatch(out, lengths), trues
+
 def padded_collate_criteo_rnn_domyshnik(batch):
     
     new_x = defaultdict(list)
@@ -376,7 +408,9 @@ class OkkoMetricLearnDataSet(torch.utils.data.Dataset):
 
         x = defaultdict(list)
         for _ in range(self.n_augments):
-            idx = torch.randint(0, 2, (l,)).bool()
+            #idx = torch.randint(0, 2, (l,)).bool()
+            idx = torch.bernoulli(0.8 * torch.ones(l)).bool()
+            idx[-4:] = False
 
             for k in sorted(list(FEATURES.keys())):
                 tmp = to_tensor(rec[k], k)
@@ -508,13 +542,14 @@ class OkkoDomyshnikDataSet(torch.utils.data.Dataset):
         x = defaultdict(list)
         n = 4
         for _ in range(self.n_augments):
-            idx = torch.randint(0, 2, (l,)).bool()
+            #idx = torch.randint(0, 2, (l,)).bool()
+            idx = torch.bernoulli(0.8 * torch.ones(l)).bool()
             idx[-n:] = False # don't take last 4 films they are for test
 
             for k in sorted(list(FEATURES.keys())):
                 tmp = to_tensor(rec[k], k)
                 tmp = tmp.masked_select(idx)
-                x[k].append(tmp[-9:])
+                x[k].append(tmp[-125:])
 
         # target
         y_idx = torch.zeros(l).bool()
@@ -534,6 +569,47 @@ class OkkoDomyshnikDataSet(torch.utils.data.Dataset):
         rewards = rewards.expand(self.n_augments, lbls.size(0))
 
         return x, (true_lbls, fake_labels, rewards)
+
+class OkkoClassificationDataSet(torch.utils.data.Dataset):
+
+    def __init__(self, data):
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        rec = self.data[idx]['feature_arrays']
+        l = self.data[idx]['len']
+
+        def to_tensor(val, key):
+            if FEATURES[key]['type'] == 'cat':
+                return torch.LongTensor(val)
+            else:
+                return torch.FloatTensor(val)
+
+        x = defaultdict(list)
+        n = 4
+        idx = torch.randint(0, 2, (l,)).bool()
+        idx[-n:] = False # don't take last 4 films they are for test
+
+        for k in sorted(list(FEATURES.keys())):
+            tmp = to_tensor(rec[k], k)
+            tmp = tmp.masked_select(idx)
+            x[k].append(tmp[-125:])
+
+        # target
+        y_idx = torch.zeros(l).bool()
+        y_idx[-n:] = True
+        tmp = to_tensor(rec['element_uid'], 'element_uid')
+        lbls = tmp.masked_select(y_idx)
+
+        # mask
+        mask = torch.zeros(FEATURES['element_uid']['in'])
+        mask[lbls.long()] = 0.25
+
+        return x, mask
+
 
 def get_criteo_data_loaders(batch_size, n_augments, augment_labels=False):
     x_train, y_train, x_test, y_test = criteo_control_datasets()
@@ -642,7 +718,7 @@ def get_cifar10_train_loader(batch_size, n_augments=4, augment_labels=False):
     
     train_data_loader = torch.utils.data.DataLoader(data_train,
                                           batch_size=batch_size,
-                                          shuffle=True,
+                                          shuffle=False,#True,
                                           num_workers=1)
     return train_data_loader
     
@@ -754,5 +830,24 @@ def get_okko_domyshnik_loaders(batch_size, n_augments):
         shuffle=False,
         num_workers=4,
         collate_fn=padded_collate_okko_domyshnik)
+
+    return train_loader, test_loader
+
+def get_okko_classification_loaders(batch_size):
+    train_data, test_data = okko_classification_datasets()
+
+    train_loader = torch.utils.data.DataLoader(
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=16,
+        collate_fn=padded_collate_okko_classification)
+
+    test_loader = torch.utils.data.DataLoader(
+        test_data,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=4,
+        collate_fn=padded_collate_okko_classification)
 
     return train_loader, test_loader

@@ -11,9 +11,19 @@ WEIGHTS_PATH = '/mnt/data/molchanov/models'
 MODEL_POSTFIX = ''
 NUM_CLASSES = 10
 ADD_INFO = None
-BAD_REWARD = -0.8
+BAD_REWARD = -0.08
 DEVICE = 'cuda'
 ERROR_RATE = 0.5
+LOGGER = None
+LOGGER_STEP = 50
+
+def set_loger(loger):
+    global LOGGER
+    LOGGER = loger
+
+def log(model, metrics, metrics_prefix):
+    if LOGGER is not None:
+        LOGGER.log(model, metrics, metrics_prefix)
 
 SAVE_MODELS = True
 #CURRENT_PARAMS = 'cifar10_metric_learning_per_sampl'
@@ -24,8 +34,10 @@ SAVE_MODELS = True
 #CURRENT_PARAMS = 'okko_metric_learning'
 #CURRENT_PARAMS = 'okko_domyshik'
 #CURRENT_PARAMS = 'cifar10_vae_domyshnik'
-CURRENT_PARAMS = 'criteo_metric_learning'
+#CURRENT_PARAMS = 'criteo_metric_learning'
 #CURRENT_PARAMS = 'criteo_domyshnik'
+#CURRENT_PARAMS = 'okko_classification'
+CURRENT_PARAMS = 'cifar10_metric_learning'
 
 OKKO_FEATURES = {
 
@@ -44,8 +56,12 @@ OKKO_FEATURES = {
     'device_manufacturer': {'type': 'cat', 'in': 100, 'out': 4},
     'feature_3'          : {'type': 'cat', 'in': 49, 'out': 4},
     'video_type'         : {'type': 'cat', 'in': 3, 'out': 1},
-    #'element_uid'        : {'type': 'cat', 'in': 10200, 'out': 16},
-    'element_uid'        : {'type': 'cat', 'in': 15000, 'out': 16},
+    'element_uid'        : {'type': 'cat', 'in': 10200, 'out': 16},
+    #'element_uid'        : {'type': 'cat', 'in': 15000, 'out': 16},
+}
+
+OKKO_FEATURES2 = {
+    'element_uid'        : {'type': 'cat', 'in': 10200, 'out': 16},
 }
 
 RECCO_FEATURES = {
@@ -53,7 +69,7 @@ RECCO_FEATURES = {
     'codes'    : {'type': 'cat', 'in': 13, 'out': 4},
 }
 
-FEATURES = RECCO_FEATURES
+FEATURES = OKKO_FEATURES2
 
 class PaddedBatch:
     def __init__(self, payload, length, add_info=None):
@@ -230,11 +246,11 @@ PARAMS = {
         negatives_cnt=5,
         marging=0.5,
         step_size=1,
-        model_postfix='okko_metrlearn2',
-        device='cuda:1',
+        model_postfix='okko_metrlearn',
+        device='cuda:0',
         add_info={  
                     'losses': [
-                        {'name': 'ContrastiveLossOriginal', 'marging': 0.5, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        {'name': 'ContrastiveLoss', 'marging': 0.5, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
                         ],
                     }
                     
@@ -244,17 +260,39 @@ PARAMS = {
         n_augments=5,
         lr=0.002,
         gamma=0.9025,
-        batch_size=128,
+        batch_size=256,
         epochs=15,
         sampling_strategy='HardNegativePair',
         negatives_cnt=5,
         marging=0.5,
         step_size=1,
         model_postfix='okko_domyshnik',
-        device='cuda:2',
+        device='cuda:3',
         add_info={  
                     'losses': [
                         {'name': 'ContrastiveLossOriginal', 'marging': 0.1, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        #{'name': 'ContrastiveLoss', 'marging': 0.1, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        ],
+                    'unfreeze': True
+                    },
+                    
+        ),
+
+    "okko_classification": config_params(
+        n_augments=None,
+        lr=0.002,
+        gamma=0.9025,
+        batch_size=128,
+        epochs=15,
+        sampling_strategy='None',
+        negatives_cnt=None,
+        marging=0.5,
+        step_size=1,
+        model_postfix='okko_classifiaction',
+        device='cuda:0',
+        add_info={  
+                    'losses': [
+                        {'name': 'KLDivLoss'}
                         ],
                     }
                     
@@ -356,6 +394,26 @@ PARAMS = {
                                          'k_reward': 15,#15,
                                          'centroids_count': 500,
                                          'factor': 1}),
+
+    "cifar10_metric_learning": config_params(
+        n_augments=5,
+        lr=0.002,
+        gamma=0.9025,
+        batch_size=128,
+        epochs=150,
+        sampling_strategy='HardNegativePair',
+        negatives_cnt=5,
+        marging=0.5,
+        step_size=1,
+        model_postfix='cifar10_pos_contrastive_loss_percentile_sum',
+        device='cuda:2',
+        add_info={  
+                    'losses': [
+                        {'name': 'PositiveContrastiveLoss', 'marging': 0.5, 'neg_count': 5, 'sampling_strategy': 'HardNegativePair'}
+                        ],
+                    }
+                    
+        ),  
 
     "cifar10_vae_domyshnik": config_params(
         n_augments=5,

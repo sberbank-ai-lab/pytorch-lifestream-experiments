@@ -587,6 +587,25 @@ def okko_metrlearn_model():
     model = nn.Sequential(*[e, r, l, L2Normalization()])
     return model
 
+def okko_classification_model():
+    config = {
+            'hidden_size': 256,
+            'type': 'gru',
+            'bidir': False,
+            'trainable_starter': 'static'
+        }
+
+    e = OkkoEncoder()
+    r = sec.RnnEncoder(input_size=e.get_outsize(), config=config)
+    l = sec.LastStepEncoder()
+    model = nn.Sequential(*[e, 
+                            r, 
+                            l, 
+                            nn.Linear(256, FEATURES['element_uid']['in']),
+                            nn.LogSoftmax(dim=-1)
+                        ])
+    return model
+
 def criteo_metrlearn_model():
     if ADD_INFO['augment_type'] == 'rnn':
         print('use rnn model')
@@ -734,9 +753,14 @@ def get_cifar10_centroids_model(epoch):
     # random neg
     #return load_model_params(model, f'cifar10_metric_learning.w{epoch}', 'cifar10_global_c10_caug5_iaug5_cmrg05_imrg02_test_centroids_random_neg')
 
+def get_cifar10_metric_learning_model(epoch):
+    model = Cifar10MetricLearningNet3()
+    model.load_state_dict(torch.load(f"/mnt/data/molchanov/models/cifar10_pos_contrastive_loss_cifar10_metric_learning.w{epoch}"))
+    return model
+
 def get_okko_metric_learn_model(epoch):
     model = okko_metrlearn_model()
-    return load_model_params(model, f'okko.w{epoch}', 'okko_metrlearn2')
+    return load_model_params(model, f'okko.w{epoch}', 'okko_metrlearn')
 
 def get_okko_domyshnik_model(epoch):
     model = okko_domyshnik_model()

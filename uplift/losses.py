@@ -76,6 +76,27 @@ def outer_cosine_similarity(A, B=None):
         return torch.cat(batch_results, dim=1)
 
 
+def percentile(t, q):
+    """
+    Return the ``q``-th percentile of the flattened input tensor's data.
+    
+    CAUTION:
+     * Needs PyTorch >= 1.1.0, as ``torch.kthvalue()`` is used.
+     * Values are not interpolated, which corresponds to
+       ``numpy.percentile(..., interpolation="nearest")``.
+       
+    :param t: Input tensor.
+    :param q: Percentile to compute, which must be between 0 and 100 inclusive.
+    :return: Resulting value (scalar).
+    """
+    # Note that ``kthvalue()`` works one-based, i.e. the first sorted value
+    # indeed corresponds to k=1, not k=0! Use float(q) instead of q directly,
+    # so that ``round()`` returns an integer, even if q is a np.float32.
+    k = 1 + round(.01 * float(q) * (t.size(-1) - 1))
+    result = t.kthvalue(k, dim=-1).values
+    return result
+
+
 class ContrastiveLoss(nn.Module):
     """
     Contrastive loss
@@ -96,9 +117,7 @@ class ContrastiveLoss(nn.Module):
         positive_pairs, negative_pairs = self.pair_selector.get_pairs(embeddings, target)
         positive_loss = F.pairwise_distance(embeddings[positive_pairs[:, 0]], embeddings[positive_pairs[:, 1]]).pow(2)
 
-        tmp = positive_loss.sum() / positive_loss.size(0)
-        #positive_loss = (F.relu(positive_loss - self.margin * self.kpos)).sum()
-        positive_loss = positive_loss.sum()
+        positive_loss = (F.relu(positive_loss - self.margin * self.kpos)).sum()
         
         negative_loss = F.relu(
             self.margin * self.kneg - F.pairwise_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
@@ -133,12 +152,93 @@ class ContrastiveLossOriginal(nn.Module):
         positive_pairs, negative_pairs = self.pair_selector.get_pairs(embeddings, target)
         positive_loss = F.pairwise_distance(embeddings[positive_pairs[:, 0]], embeddings[positive_pairs[:, 1]]).pow(2)
 
-        #positive_loss = (F.relu(positive_loss - self.margin)).sum()
         positive_loss = positive_loss.sum()
         
         negative_loss = F.relu(
             self.margin - F.pairwise_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
         ).pow(2).sum()
+        
+        return positive_loss, negative_loss
+
+
+class PositiveContrastiveLoss(nn.Module):
+
+    def __init__(self, margin, pair_selector):
+        super(PositiveContrastiveLoss, self).__init__()
+        self.margin = margin
+        self.pair_selector = pair_selector
+
+    def forward(self, embeddings, target):
+        
+        positive_pairs, negative_pairs = self.pair_selector.get_pairs(embeddings, target)
+        positive_loss = F.pairwise_distance(embeddings[positive_pairs[:, 0]], embeddings[positive_pairs[:, 1]]).pow(2)
+        #positive_loss = positive_loss.sum()
+        #positive_loss = (F.relu(positive_loss - self.margin * 0.1)).sum()
+        positive_loss = positive_loss.mean()
+
+        # 0)
+        '''
+        #negative_loss = 2 - outer_pairwise_distance(embeddings).max()
+        '''
+        
+        # 1)
+        '''
+        #negative_loss = -1 * outer_pairwise_distance(embeddings).max()
+        '''
+        
+        # 2)
+        '''
+        #negative_loss = outer_pairwise_distance(embeddings).max().pow(-1)
+        '''
+
+        # 3)
+        '''
+        #idx = torch.arange(start=0, step=5, end=15).to(embeddings.device)
+        #embs = torch.index_select(input=embeddings ,index=idx, dim=0)
+        #negative_loss = outer_pairwise_distance(embs).median().pow(-1) #+ outer_pairwise_distance(embs).min()
+        #negative_loss = F.relu(self.margin - negative_loss)
+        #negative_loss = F.relu(self.margin - outer_pairwise_distance(embs).mean())
+        '''
+
+        # 4)
+        '''
+        #negative_loss = F.relu(
+        #    self.margin - F.pairwise_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
+        #).pow(2).sum()
+        '''
+
+        # 5)
+        '''
+        idx = torch.arange(start=0, step=5, end=15).to(embeddings.device)
+        embs = torch.index_select(input=embeddings ,index=idx, dim=0)
+        # для каждого эмбединга вычисляем 10 поцентный перцентиль для его
+        # для его расстояний до остальных эмбеддингов. В батче 10 процентов эмбедингов того же класса
+        # и они должны лежать в сфере радиуса self.margin а остальный за ней. Требуем чтобы 10 процентный перцентиль был внутри
+        # сферы, а более высокий перцентиль за ее пределами 
+        percentile_10 = percentile(outer_pairwise_distance(embs), 10).max().pow(2) # берем максимальный среди всех ембедингов
+        percentile_15 = percentile(outer_pairwise_distance(embs), 15).min().pow(2) # берем минимальный среди всех ембедингов
+        negative_loss = F.relu(self.margin - percentile_15) + percentile_10
+        '''
+
+        # 6)
+        idx = torch.arange(start=0, step=5, end=15).to(embeddings.device)
+        embs = torch.index_select(input=embeddings ,index=idx, dim=0)
+        # для каждого эмбединга вычисляем 10 поцентный перцентиль для его
+        # для его расстояний до остальных эмбеддингов. В батче 10 процентов эмбедингов того же класса
+        # и они должны лежать в сфере радиуса self.margin а остальный за ней. Требуем чтобы 10 процентный перцентиль и все сэплы до него были внутри
+        # сферы, а более высокий перцентиль и остальный самлы за ее пределами 
+        dists = outer_pairwise_distance(embs).pow(2).sort(dim=-1).values
+        k = 1 + round(.01 * float(10) * (dists.size(-1) - 1))
+        mask_0 = torch.zeros(dists.size(-1))
+        mask_0[:k] = 1.0
+        mask_0 = mask_0.expand(dists.size(0), dists.size(-1)).to(dists.device)
+        mask_1 = 1 - mask_0
+
+        percentile_10 = (dists * mask_0).sum(-1).mean()#.max()
+        percentile_other = (dists * mask_1).sum(-1).mean()#.min()
+        
+        negative_loss = F.relu(self.margin - percentile_other) + percentile_10 #F.relu(percentile_10 - self.margin)
+
         
         return positive_loss, negative_loss
 
