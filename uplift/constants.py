@@ -404,7 +404,7 @@ PARAMS = {
         sampling_strategy='HardNegativePair',
         negatives_cnt=5,
         marging=0.5,
-        step_size=1,
+        step_size=5,
         model_postfix='cifar10_pos_contrastive_loss_percentile_sum',
         device='cuda:2',
         add_info={  
@@ -450,7 +450,7 @@ MODEL_POSTFIX = cparams.model_postfix
 ADD_INFO = cparams.add_info
 DEVICE = cparams.device
 
-print(f'model _params:\n\
+summary = f'model _params:\n\
         CURRENT_PARAMS {CURRENT_PARAMS}\n\
         N_AUGMENTS {N_AUGMENTS}\n\
         LEARNING_RATE {LEARNING_RATE}\n\
@@ -464,6 +464,9 @@ print(f'model _params:\n\
         MODEL_POSTFIX {MODEL_POSTFIX}\n\
         ADD_INFO {ADD_INFO}\n\
         ERROR_RATE {ERROR_RATE}\n\
-       ')
+       '
+print(summary)
 if not SAVE_MODELS:
     print('Attention: model will not be saved')
+
+COMMENT = f'model: {CURRENT_PARAMS}\nadditional information: {ADD_INFO}\ncomment: loss number 4\nsummary: {summary}'

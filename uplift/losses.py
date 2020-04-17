@@ -174,7 +174,7 @@ class PositiveContrastiveLoss(nn.Module):
         positive_loss = F.pairwise_distance(embeddings[positive_pairs[:, 0]], embeddings[positive_pairs[:, 1]]).pow(2)
         #positive_loss = positive_loss.sum()
         #positive_loss = (F.relu(positive_loss - self.margin * 0.1)).sum()
-        positive_loss = positive_loss.mean()
+        #positive_loss = positive_loss.mean()
 
         # 0)
         '''
@@ -201,11 +201,13 @@ class PositiveContrastiveLoss(nn.Module):
         '''
 
         # 4)
-        '''
-        #negative_loss = F.relu(
-        #    self.margin - F.pairwise_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
-        #).pow(2).sum()
-        '''
+        
+        negative_loss = F.relu(
+            self.margin - F.pairwise_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
+        ).pow(2).sum()
+
+        positive_loss = positive_loss.sum()
+        
 
         # 5)
         '''
@@ -221,6 +223,7 @@ class PositiveContrastiveLoss(nn.Module):
         '''
 
         # 6)
+        '''
         idx = torch.arange(start=0, step=5, end=15).to(embeddings.device)
         embs = torch.index_select(input=embeddings ,index=idx, dim=0)
         # для каждого эмбединга вычисляем 10 поцентный перцентиль для его
@@ -238,6 +241,56 @@ class PositiveContrastiveLoss(nn.Module):
         percentile_other = (dists * mask_1).sum(-1).mean()#.min()
         
         negative_loss = F.relu(self.margin - percentile_other) + percentile_10 #F.relu(percentile_10 - self.margin)
+
+        positive_loss = positive_loss.mean()
+        '''
+
+        # 7)
+        '''
+        idx = torch.arange(start=0, step=5, end=15).to(embeddings.device)
+        embs = torch.index_select(input=embeddings ,index=idx, dim=0)
+        # для каждого эмбединга вычисляем 10 поцентный перцентиль для его
+        # для его расстояний до остальных эмбеддингов. В батче 10 процентов эмбедингов того же класса
+        # и они должны лежать в сфере радиуса self.margin а остальный за ней. Требуем чтобы 10 процентный перцентиль и все сэплы до него были внутри
+        # сферы, а более высокий перцентиль и остальный самлы за ее пределами 
+        dists = outer_pairwise_distance(embs).pow(2).sort(dim=-1).values
+        k = 1 + round(.01 * float(10) * (dists.size(-1) - 1))
+        mask_0 = torch.zeros(dists.size(-1))
+        mask_0[:k] = 1.0
+        mask_0 = mask_0.expand(dists.size(0), dists.size(-1)).to(dists.device)
+        mask_1 = 1 - mask_0
+
+        percentile_10 = (dists * mask_0).sum(-1).mean()#.max()
+        percentile_other = (dists * mask_1).sum(-1).mean()#.min()
+        
+        negative_loss = F.relu(self.margin - percentile_other) + percentile_10 #F.relu(percentile_10 - self.margin)
+
+        positive_loss = positive_loss.mean() * 0
+        '''
+
+        # 8)
+        '''
+        idx = torch.arange(start=0, step=5, end=15).to(embeddings.device)
+        embs = torch.index_select(input=embeddings ,index=idx, dim=0)
+        # для каждого эмбединга вычисляем 10 поцентный перцентиль для его
+        # для его расстояний до остальных эмбеддингов. В батче 10 процентов эмбедингов того же класса
+        # и они должны лежать в сфере радиуса self.margin а остальный за ней. Требуем чтобы 10 процентный перцентиль и все сэплы до него были внутри
+        # сферы, а более высокий перцентиль и остальный самлы за ее пределами 
+        dists = outer_pairwise_distance(embs).pow(2).sort(dim=-1).values
+        k = 1 + round(.01 * float(10) * (dists.size(-1) - 1))
+        mask_0 = torch.zeros(dists.size(-1))
+        mask_0[:k] = 1.0
+        mask_0 = mask_0.expand(dists.size(0), dists.size(-1)).to(dists.device)
+        mask_1 = 1 - mask_0
+
+        percentile_10 = (dists * mask_0).sum(-1).max()
+        percentile_other = (dists * mask_1).sum(-1).min()
+        
+        negative_loss = F.relu(self.margin * 2- percentile_other) + F.relu(percentile_10 - self.margin * 0.5)
+
+        positive_loss = positive_loss.mean() * 0
+        '''
+        
 
         
         return positive_loss, negative_loss

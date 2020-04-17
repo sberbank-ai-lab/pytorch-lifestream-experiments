@@ -384,8 +384,8 @@ def get_launch_info():
                                                     add_info=ADD_INFO)
 
         # set loger info
-        train = get_cifar10_train_loader(batch_size=1024, n_augments=2)
-        test = get_cifar10_train_loader(batch_size=1024, n_augments=2)
+        train = get_cifar10_train_loader(batch_size=800, n_augments=5)
+        test = get_cifar10_train_loader(batch_size=800, n_augments=5)
         (train_imgs, train_lbls) = next(iter(train))
         (test_imgs, test_lbls) = next(iter(test))
         device = torch.device(DEVICE)
@@ -501,6 +501,8 @@ class Logger:
         self.prefix = ''
         self.step = 0
         self.log_step = 0
+        self.writer.add_text(tag='COMMENT', text_string=COMMENT, global_step=0)
+        self.log_index = 0
 
     def _get_centroids(self, embeds, lbls):
         l, e = lbls, embeds
@@ -523,11 +525,12 @@ class Logger:
     def _log_metrics(self, prefix, metrics, step):
         self.writer.add_scalars(f'{prefix}_metrics_info', metrics, step)
 
-
     def _log_centroids_distance(self, centroids, step):
         D_centroids = outer_pairwise_distance(centroids)
         for i in range(D_centroids.size(0)):
             d = {}
+            if i != self.log_index:
+                continue
             for j in range(D_centroids.size(0)):
                 if i == j:
                     continue
@@ -535,7 +538,7 @@ class Logger:
                 d[f'{ci}_{cj}'] = D_centroids[i, j]
             self.writer.add_scalars(f'{self.prefix}_class{ci}_centroids_distance', d, step)
 
-    def _log_incluster_average_distance(self, embs, lbls, step):
+    def _log_incluster_average_distance(self, embs, imgs, lbls, step):
         # mask 0
         ll = lbls.expand(lbls.size(0), lbls.size(0))
         m0 = (ll == ll.transpose(0, 1)).int()
@@ -562,19 +565,102 @@ class Logger:
         D2 = torch.div(D2, weights)
         
         log_D = {f'class_{self.class_names[i].upper()}': val.item() for i, val in enumerate(D)}
-        self.writer.add_scalars(f'{self.prefix}_in_classes_distance', log_D, step)
+        self.writer.add_scalars(f'{self.prefix}_inner_classes_distance', log_D, step)
 
-        # dispertoion
+        # dispertion
         varD = (D2 - D.pow(2)).pow(0.5)
         for i, (delta, d) in enumerate(zip(varD, D)):
+            if i != self.log_index:
+                continue
             t = {"low": (d - delta).item(),
                  "up":  (d + delta).item(),
                  "avrg": d.item()
                 }
-            self.writer.add_scalars(f'{self.prefix}_class_{self.class_names[i].upper()}_range', t, step)
+            self.writer.add_scalars(f'{self.prefix}_class_{self.class_names[i].upper()}_spread', t, step)
 
+        # image tracks
+        D = outer_pairwise_distance(embs)
+        num_log_class = weights[self.log_index].pow(0.5).int()
+        start_log_class = 0
+        for i in range(self.log_index):
+            start_log_class += weights[i].pow(0.5).int()
+
+        for other_class in range(num_lbls):
+            num_other_class = weights[other_class].pow(0.5).int()
+            start_other_class = 0
+            for i in range(other_class):
+                start_other_class += weights[i].pow(0.5).int()
+            # all distances among elements in log_class vs other_class
+            D_elems = D[start_log_class: start_log_class + num_log_class, start_other_class: start_other_class + num_other_class]
+            
+            # tracked images
+            log_idxs, other_idxs = [1], [i for i in range(0, num_other_class, int(num_other_class/10))]
+            if step == 1:
+                for log_i in log_idxs:
+                    log2other_img = [imgs[start_log_class + log_i]]
+                    for other_j in other_idxs:
+                        log2other_img.append(imgs[start_other_class + other_j])
+
+                    log_img_batch = torch.stack(log2other_img, dim=0)
+                    self.writer.add_images(tag=f'{self.class_names[self.log_index]}_{self.class_names[other_class]}', 
+                                           img_tensor=log_img_batch, 
+                                           global_step=step)
+            # track distances
+            for log_i in log_idxs:
+                log_dist = {}
+                for other_j in other_idxs:
+                    log_dist[f'{self.class_names[self.log_index]}{log_i}_{self.class_names[other_class]}{other_j}'] = D_elems[log_i, other_j]
+
+                self.writer.add_scalars(f'{self.prefix}_{self.class_names[self.log_index]}_{self.class_names[other_class]}_distance', log_dist, step)
+
+    def _log_augmented_statistics(self, imgs, embs, lbls, step):
+        # imgs size: B, n_augs, C, H, W
+        # lbls - sorted
+        n_augs = imgs.size(1)
+
+        # get positions of log_index items
+        num_lbls = lbls.max().int().item() + 1
+        m = lbls.expand(num_lbls, lbls.size(0))
+        k = torch.arange(num_lbls).expand(lbls.size(0), num_lbls).transpose(0, 1).to(lbls.device)
+        m1 = (m == k).int().sum(-1)
+        start_pos = 0
+        for i in range(self.log_index):
+            start_pos += m1[i]
+        num_log_idx_elems = m1[self.log_index]
+        
+        # select
+        elems = imgs[start_pos : start_pos + num_log_idx_elems]
+        elems_embs = embs[start_pos : start_pos + num_log_idx_elems]
+        elems_embs = elems_embs.view(-1, elems_embs.size(-1))
+        D_elems = outer_pairwise_distance(elems_embs)
+
+        elems_lbls = torch.arange(elems.size(0)).expand(n_augs, elems.size(0)).transpose(0, 1).contiguous().view(-1).to(lbls.device)
+        ll = elems_lbls.expand(elems_lbls.size(0), elems_lbls.size(0))
+        m0 = (ll == ll.transpose(0, 1)).int()
+
+        D_elems *= m0
+        D_elems2 = D_elems.pow(2)
+
+        D_elems /= (n_augs * n_augs)
+        D_elems2 /= (n_augs * n_augs)
+
+        stds = []
+        for i in range(0, D_elems.size(-1), n_augs):
+            D = D_elems[i: i + n_augs, i: i + n_augs].sum()
+            D2 = D_elems2[i: i + n_augs, i: i + n_augs].sum()         
+            val = (D2 - D.pow(2)).pow(0.5)
+            stds.append(val.item())
+
+        stdMean, stdStd = np.array(stds).mean(), np.array(stds).std() 
+        log_std = {
+            'mean': stdMean,
+            'low' : stdMean - stdStd,
+            'up'  : stdMean + stdStd
+        }
+        self.writer.add_scalars(f'{self.prefix}_{self.class_names[self.log_index]}_augment_distance_spread', log_std, step)
+ 
     def _forward(self, imgs, lbls, model):
-        lbls, indices = lbls.sort()
+        lbls, indices = lbls.sort() # лейблы только оригинальных картинок (для аугментированных копий - нет)
         n_augs = imgs.size(1)
 
         with torch.no_grad():
@@ -594,7 +680,6 @@ class Logger:
         orig_embs = torch.index_select(input=_embs, index=idx, dim=0)
 
         return orig_imgs, orig_embs, imgs, embs, lbls
-    
 
     def _log(self, imgs, lbls, model, step):
         orig_imgs, orig_embs, imgs, embs, lbls = self._forward(imgs, lbls, model)
@@ -606,12 +691,23 @@ class Logger:
         self._log_centroids_distance(centroids, step)
 
         # log inclass average distances
-        self._log_incluster_average_distance(orig_embs, lbls, step)
+        self._log_incluster_average_distance(orig_embs, orig_imgs, lbls, step)
+
+        # log augmented statistics
+        self._log_augmented_statistics(imgs, embs, lbls, step)
 
     def log(self, model, metrics, metrics_prefix):
-        if self.step % STEP_SIZE == 0:
-            self.prefix = 'TRAIN'
-            self._log(self.train_sample[0], self.train_sample[1], model, self.log_step)
+        b_log = False
+        if self.step < 300:
+            if self.step % 3 == 0:
+                b_log = True
+        else:
+            if self.step % LOGGER_STEP == 0:
+                b_log = True
+
+        if b_log:
+            #self.prefix = 'TRAIN'
+            #self._log(self.train_sample[0], self.train_sample[1], model, self.log_step)
 
             self.prefix = 'TEST'
             self._log(self.test_sample[0], self.test_sample[1], model, self.log_step)
