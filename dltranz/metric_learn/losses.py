@@ -7,6 +7,17 @@ from dltranz.cpc import CPCLossV2
 from .metric import outer_cosine_similarity
 
 
+def acosh(z, eps=1e-9):
+    return torch.log(z + (z - 1 + eps).pow(0.5) * (z + 1).pow(0.5))
+
+
+def poincare_distance(a, b):
+    t = ((a - b) ** 2).sum(dim=1)
+    t = t / ((1 - (a ** 2).sum(dim=1)) * (1 - (b ** 2).sum(dim=1)))
+    t = 1 + 2 * t
+    return acosh(t)
+
+
 class ContrastiveLoss(nn.Module):
     """
     Contrastive loss
@@ -30,6 +41,31 @@ class ContrastiveLoss(nn.Module):
         ).pow(2)
         loss = torch.cat([positive_loss, negative_loss], dim=0)
         
+        return loss.sum(), len(positive_pairs) + len(negative_pairs)
+
+
+class ContrastiveLossH(nn.Module):
+    """
+    Contrastive loss
+
+    "Signature verification using a siamese time delay neural network", NIPS 1993
+    https://papers.nips.cc/paper/769-signature-verification-using-a-siamese-time-delay-neural-network.pdf
+    """
+
+    def __init__(self, margin, pair_selector):
+        super(ContrastiveLossH, self).__init__()
+        self.margin = margin
+        self.pair_selector = pair_selector
+
+    def forward(self, embeddings, target):
+        positive_pairs, negative_pairs = self.pair_selector.get_pairs(embeddings, target)
+        positive_loss = poincare_distance(embeddings[positive_pairs[:, 0]], embeddings[positive_pairs[:, 1]]).pow(2)
+
+        negative_loss = F.relu(
+            self.margin - poincare_distance(embeddings[negative_pairs[:, 0]], embeddings[negative_pairs[:, 1]])
+        ).pow(2)
+        loss = torch.cat([positive_loss, negative_loss], dim=0)
+
         return loss.sum(), len(positive_pairs) + len(negative_pairs)
 
 
@@ -215,7 +251,15 @@ def get_loss(params, sampling_strategy, kw_params=None):
         }
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
         loss_fn = ContrastiveLoss(**kwargs)
-            
+
+    elif params['train.loss'] == 'ContrastiveLossH':
+            kwargs = {
+                'margin': params.get('train.margin', None),
+                'pair_selector': sampling_strategy
+            }
+            kwargs = {k: v for k, v in kwargs.items() if v is not None}
+            loss_fn = ContrastiveLossH(**kwargs)
+
     elif params['train.loss'] == 'BinomialDevianceLoss':
         kwargs = {
             'C': params.get('train.C', None),

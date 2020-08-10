@@ -29,6 +29,38 @@ class L2Normalization(nn.Module):
         return input.div(torch.norm(input, dim=1).view(-1, 1))
 
 
+class ATan(torch.nn.Module):
+    def __init__(self, eps=1e-9, one_threshold=1e-2, cnt_threshold=0.05):
+        super().__init__()
+        self.eps = eps
+        self.one_threshold = one_threshold
+        self.cnt_threshold = cnt_threshold
+
+    def forward(self, z):
+        t = 1 - torch.abs(z.detach()) <= self.one_threshold
+        t = t.int().sum()
+        cnt_threshold = z.shape[0] * z.shape[1] * self.cnt_threshold
+        if t > cnt_threshold:
+            logger.warning(f'ATan. threshold warning: {t}, z.shape: {z.shape}')
+        return torch.log((1 + z + self.eps) / (1 - z + self.eps)) / 2
+
+
+class PoincareNormalization(nn.Module):
+    def forward(self, input):
+        """
+        input is point in N-dimensional euclidean space
+
+        :param input:
+        :return:
+        """
+        # map input on hyperbolic space with N+1 dimensions
+        # only `z` we need
+        z = (input.pow(2).sum(dim=1) + 1).pow(0.5)
+
+        # map points from hyperbola to poincare ball
+        return input.div(z.view(-1, 1) + 1)
+
+
 class Binarization(Function):
     @staticmethod
     def forward(self, x):
@@ -72,9 +104,29 @@ def rnn_model(params):
     if 'projection_head' in params:
         logger.info('projection_head included')
         layers.extend(projection_head(params['rnn.hidden_size'], params['projection_head.output_size']))
-    if params['use_normalization_layer']:
+
+    use_normalization_layer = params['use_normalization_layer']
+    if type(use_normalization_layer) is bool and use_normalization_layer:
+        use_normalization_layer = 'l2'
+    if type(use_normalization_layer) is bool and not use_normalization_layer:
+        use_normalization_layer = 'none'
+
+    if use_normalization_layer == 'none':
+        logger.info('None of normalization included. Result is `tan` activation')
+    elif use_normalization_layer == 'l2':
         layers.append(L2Normalization())
-        logger.info('L2Normalization included')
+        logger.info('L2Normalization included. Output on unit sphere')
+    elif use_normalization_layer == 'l2_atan':
+        layers.append(ATan())
+        layers.append(L2Normalization())
+        logger.info('L2Normalization with ATan included. Output on unit sphere')
+    elif use_normalization_layer == 'poincare':
+        layers.append(ATan())
+        layers.append(PoincareNormalization())
+        logger.info('Poincare normalization included. Result is inside unit sphere')
+    else:
+        raise AttributeError(f'Unknown normalization type: {use_normalization_layer}')
+
     m = torch.nn.Sequential(*layers)
     return m
 

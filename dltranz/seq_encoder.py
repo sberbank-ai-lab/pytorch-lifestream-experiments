@@ -81,6 +81,7 @@ class RnnEncoder(nn.Module):
         # prepare initial state
         if h_0 is None and self.trainable_starter == 'static':
             h_0 = self.starter_h.expand(-1, len(x.seq_lens), -1).contiguous()
+            h_0 = torch.tanh(h_0)
 
         # pass-through rnn
         if self.rnn_type == 'lstm':
