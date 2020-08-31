@@ -45,6 +45,17 @@ class ATan(torch.nn.Module):
         return torch.log((1 + z + self.eps) / (1 - z + self.eps)) / 2
 
 
+class ExpNorm(torch.nn.Module):
+    def __init__(self, eps=1e-5):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, z):
+        t = z.pow(2).sum(dim=1).pow(0.5)
+        t = (1 - torch.exp(-t)) / (t + self.eps)
+        return z * t.view(-1, 1)
+
+
 class PoincareNormalization(nn.Module):
     def forward(self, input):
         """
@@ -116,6 +127,9 @@ def rnn_model(params):
     elif use_normalization_layer == 'l2':
         layers.append(L2Normalization())
         logger.info('L2Normalization included. Output on unit sphere')
+    elif use_normalization_layer == 'atan':
+        layers.append(ATan())
+        logger.info('Only ATan included')
     elif use_normalization_layer == 'l2_atan':
         layers.append(ATan())
         layers.append(L2Normalization())
@@ -124,6 +138,10 @@ def rnn_model(params):
         layers.append(ATan())
         layers.append(PoincareNormalization())
         logger.info('Poincare normalization included. Result is inside unit sphere')
+    elif use_normalization_layer == 'exp':
+        layers.append(ATan())
+        layers.append(ExpNorm())
+        logger.info('ExpNorm included. Result is inside unit sphere')
     else:
         raise AttributeError(f'Unknown normalization type: {use_normalization_layer}')
 
