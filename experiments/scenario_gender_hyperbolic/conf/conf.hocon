@@ -1,0 +1,18 @@
+{
+    embedding_dim: 256
+
+    epoch_n: 10
+    batch_size: 4
+    max_node_count: 100
+    tree_batching_level: 2
+    distance: l2
+    loss: {
+        name: ContrastiveLoss
+        pos_margin: 0.1
+        neg_margin: 1.0
+    }
+    optimizer: {
+        name: SGD
+        lr: 0.0001
+    }
+}
