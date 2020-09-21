@@ -10,6 +10,8 @@ from const import COL_CLIENT_ID
 
 from train_graph_embeddings import NodeEncoder
 
+logger = logging.getLogger(__name__)
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(funcName)-20s   : %(message)s')
@@ -29,3 +31,4 @@ if __name__ == '__main__':
     for i in range(vectors.shape[1]):
         output[f'vec_{i:04d}'] = vectors[:, i]
     output.to_csv(conf['output'], index=False)
+    logger.info(f'Dump {output.shape} to "{conf["output"]}"')

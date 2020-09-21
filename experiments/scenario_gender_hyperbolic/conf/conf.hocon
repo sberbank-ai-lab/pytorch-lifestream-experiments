@@ -3,7 +3,7 @@
 
     epoch_n: 10
     batch_size: 4
-    max_node_count: 100
+    max_node_count: 400
     tree_batching_level: 2
     distance: l2
     loss: {

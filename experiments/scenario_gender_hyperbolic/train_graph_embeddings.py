@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 import pandas as pd
 import torch
 from tqdm.auto import tqdm
@@ -12,6 +13,8 @@ from split_dataset import load_source_data
 
 logger = logging.getLogger(__name__)
 
+
+COL_COUNT = 'TRX_COUNT'
 
 def find_nodes(df_trx, col_id, small_rate=0.03):
     df = abs(df_trx.groupby(col_id)[COL_AMOUNT].sum()).sort_values(ascending=False)
@@ -171,7 +174,7 @@ def train_embeddings(conf, nn_embedding, edges):
 
     nn_embedding.train()
 
-    for epoch in range(1, conf['epoch_n']):
+    for epoch in range(1, conf['epoch_n'] + 1):
         node_indexes = torch.multinomial(torch.ones(node_count), node_count, replacement=False).long()
 
         with tqdm(total=(node_count + batch_size - 1) // batch_size, mininterval=1.0, miniters=10) as p:
@@ -230,25 +233,62 @@ if __name__ == '__main__':
     all_trans = all_trans[~all_trans.isna().any(axis=1)]
     logger.info(f'all_trans final shape: {all_trans.shape}')
 
-    nodes_clients = find_nodes(all_trans, COL_CLIENT_ID)
-    nodes_terms = find_nodes(all_trans, COL_TERM_ID)
+    all_links = pd.DataFrame({
+        COL_CLIENT_ID: all_trans[COL_CLIENT_ID],
+        COL_TERM_ID: all_trans[COL_TERM_ID],
+        COL_COUNT: 1,
+        COL_AMOUNT: all_trans[COL_AMOUNT],
+    })
+    all_links = all_links.groupby([COL_CLIENT_ID, COL_TERM_ID]).sum().reset_index()
+    logger.info(f'all_links shape: {all_links.shape}')
+
+    def print_hist(name, hist, total_count):
+        values, bins = hist
+        data = pd.Series(data=(values / total_count).round(6),
+                         index=[f'{a} - {b}' for a, b in zip(bins[:-1], bins[1:])])
+        logger.info(f'{name}:\n{data}')
+
+    _a = all_links[COL_CLIENT_ID].value_counts().values
+    _stat = np.histogram(_a, bins=(2**np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int))
+    print_hist('Links per client', _stat, len(_a))
+
+    _a = all_links[COL_TERM_ID].value_counts().values
+    _stat = np.histogram(_a, bins=(2 ** np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int))
+    print_hist('Links per term', _stat, len(_a))
+
+    _a = all_links[COL_COUNT].values
+    _stat = np.histogram(_a, bins=(2 ** np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int))
+    print_hist('Transactions count per edge', _stat, len(_a))
+
+    _a = np.abs(all_links[COL_AMOUNT].values)
+    _stat = np.histogram(_a, bins=[0] + (2 ** np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int).tolist())
+    print_hist('Amount sum per edge', _stat, len(_a))
+
+    # drop
+    _ix_to_save = all_links[COL_COUNT].gt(1)
+    logger.info(f'Drop {(~_ix_to_save).sum()} edges with `transaction count` <= 1')
+    all_links = all_links[_ix_to_save]
+    #
+    _more_than_one_client_per_term = all_links[COL_TERM_ID].value_counts()[lambda x: x > 1]
+    _ix_to_save = all_links[COL_TERM_ID].isin(_more_than_one_client_per_term.index)
+    logger.info(f'Drop {(~_ix_to_save).sum()} edges with `edge count per terminal` <= 1')
+    all_links = all_links[_ix_to_save]
+    logger.info(f'all_links final shape: {all_links.shape}')
+    logger.info(f'{all_links[COL_CLIENT_ID].nunique()} clients lost, {all_links[COL_TERM_ID].nunique()} terms lost')
+
+    nodes_clients = find_nodes(all_links, COL_CLIENT_ID)
+    nodes_terms = find_nodes(all_links, COL_TERM_ID)
     logger.info(f'Found {len(nodes_clients)} client nodes and {len(nodes_terms)} term nodes')
     node_encoder = NodeEncoder(nodes_clients, nodes_terms)
 
-    all_links = pd.DataFrame({
-        COL_CLIENT_ID: node_encoder.encode_client(all_trans[COL_CLIENT_ID]),
-        COL_TERM_ID: node_encoder.encode_term(all_trans[COL_TERM_ID]),
-    })
-    all_links = all_links.groupby([COL_CLIENT_ID, COL_TERM_ID]).count().reset_index()[[COL_CLIENT_ID, COL_TERM_ID]]
-    logger.info(f'all_links final shape: {all_links.shape}')
+    all_links[COL_CLIENT_ID] = node_encoder.encode_client(all_links[COL_CLIENT_ID])
+    all_links[COL_TERM_ID] = node_encoder.encode_term(all_links[COL_TERM_ID])
 
     nn_embedding = torch.nn.Embedding(node_encoder.node_count, conf['embedding_dim'])
-    edges = prepare_links(all_links)
+    edges = prepare_links(all_links[[COL_CLIENT_ID, COL_TERM_ID]])
 
     logger.info('Train start')
     torch.save(node_encoder, 'models/node_encoder.p')
     train_embeddings(conf, nn_embedding, edges)
     torch.save(nn_embedding, 'models/nn_embedding.p')
     logger.info('Train end')
-
-
