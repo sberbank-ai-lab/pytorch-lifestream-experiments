@@ -75,63 +75,118 @@ def a_indexes(selected, edges):
 
 
 def get_distance(conf):
-    def l2_distance(d):
-        n, s = d.size()
-        return ((d.view(n, 1, s) - d.view(1, n, s)).pow(2).sum(dim=2) + 1e-6).pow(0.5)
+    def pairwise_l2_distance(a, b):
+        return ((a - b).pow(2).sum(dim=-1) + 1e-6).pow(0.5)
 
     def acosh(z, eps=1e-9):
         return torch.log(z + (torch.clamp(z - 1, 0, None) + eps).pow(0.5) * (z + 1).pow(0.5))
 
-    def pairwize_poincare_distance(a, b):
+    def l2_to_poincare(d):
+        raise NotImplementedError('Not compatible with shape with more than 2 dimensions')
+        # map input on hyperbolic space with N+1 dimensions
+        # only `z` we need
+        z = (d.pow(2).sum(dim=1) + 1).pow(0.5)
+        # map points from hyperbola to poincare ball
+        return d.div(z.view(-1, 1) + 1)
+
+    def pairwise_poincare_distance(a, b):
+        a = l2_to_poincare(a)
+        b = l2_to_poincare(b)
+
         t = ((a - b) ** 2).sum(dim=1)
         t = t / ((1 - (a ** 2).sum(dim=1)) * (1 - (b ** 2).sum(dim=1)))
         t = 1 + 2 * t
         return acosh(t)
 
-    def poincare_distance(d):
-        # map input on hyperbolic space with N+1 dimensions
-        # only `z` we need
-        z = (d.pow(2).sum(dim=1) + 1).pow(0.5)
-        # map points from hyperbola to poincare ball
-        d = d.div(z.view(-1, 1) + 1)
-
-        n, s = d.size()
-        a = d.view(n, 1, s).repeat(1, n, 1).view(n * n, s)
-        b = d.view(1, n, s).repeat(n, 1, 1).view(n * n, s)
-        return pairwize_poincare_distance(a, b).view(n, n)
-
     distance = conf['distance']
     if distance == 'l2':
-        return l2_distance
+        return pairwise_l2_distance
     elif distance == 'poincare':
-        return poincare_distance
+        return pairwise_poincare_distance
     else:
         raise AttributeError(f'Unknown distance: {distance}')
 
 
 class ContrastiveLoss(torch.nn.Module):
-    def __init__(self, neg_margin, pos_margin):
+    def __init__(self, f_distance, neg_margin, pos_margin, total_node_count, max_neg_count):
         super().__init__()
+        self.f_distance = f_distance
         self.neg_margin = neg_margin
         self.pos_margin = pos_margin
+        self.max_neg_count = max_neg_count
 
-    def forward(self, d, a):
-        not_a = 1 - a - torch.diag(torch.ones(a.size()[0], device=d.device))
-        pos_loss = torch.relu(d[a.bool()] - self.pos_margin).pow(2)
-        neg_loss = torch.relu(self.neg_margin - d[not_a.bool()]).pow(2)
+        self.rev_node_indexes = torch.zeros(total_node_count).long()
+
+    def forward(self, embedding_model, pos_ix, neg_ix):
+        pos_distance = self.f_distance(embedding_model(pos_ix[0]), embedding_model(pos_ix[1]))
+        neg_distance = self.f_distance(embedding_model(neg_ix[0]), embedding_model(neg_ix[1]))
+        pos_loss = torch.relu(pos_distance - self.pos_margin).pow(2)
+        neg_loss = torch.relu(self.neg_margin - neg_distance).pow(2)
         loss = torch.cat([pos_loss, neg_loss])
         loss = loss.sum()
         return loss
 
+    @staticmethod
+    def get_pos_indexes(selected, edges):
+        def gen():
+            for i in s_selected:
+                for j in edges.get(i, set()).intersection(s_selected):
+                    if i < j:
+                        yield i, j
+                    if i > j:
+                        yield j, i
 
-def get_loss(conf):
+        # TODO: move it to GPU
+        s_selected = set(selected.cpu().numpy().tolist())
+        a_ix = [(i, j) for i, j in gen()]
+        if len(a_ix) == 0:
+            return None
+        a_ix = torch.tensor(a_ix).to(selected.device)
+        return a_ix[:, 0], a_ix[:, 1]
+
+    def get_neg_indexes(self, embedding_model, selected, pos_ix):
+        with torch.no_grad():
+            selected_node_count = len(selected)
+            self.rev_node_indexes[selected] = torch.arange(selected_node_count)
+
+            all_embeddings = embedding_model(selected).detach()
+
+            n, s = all_embeddings.size()
+            a = all_embeddings.view(n, 1, s).repeat(1, n, 1).view(n * n, s)
+            b = all_embeddings.view(1, n, s).repeat(n, 1, 1).view(n * n, s)
+            d = self.f_distance(a, b).view(n, n)
+
+            ix_0, ix_1 = pos_ix
+            ix_0 = self.rev_node_indexes[ix_0]
+            ix_1 = self.rev_node_indexes[ix_1]
+            d[ix_0, ix_1] = float('nan')  # removing pos_ix
+            d[ix_1, ix_0] = float('nan')  # removing pos_ix
+            d[~torch.ones(n, n, dtype=torch.bool).triu(diagonal=1)] = float('nan')
+
+            d_flat = d.view(-1)
+            neg_pairs_count = (d_flat > 0).sum()
+            neg_margin = self.neg_margin
+            if self.max_neg_count is not None and neg_pairs_count > self.max_neg_count:
+                indices = torch.argsort(d_flat)
+                new_margin = d_flat[indices[self.max_neg_count]]
+                if new_margin < neg_margin:
+                    neg_margin = new_margin
+
+            ix = (neg_margin - d) > 0
+
+            ix_0, ix_1 = ix.nonzero(as_tuple=True)
+
+        return selected[ix_0], selected[ix_1]
+
+
+def get_loss(conf, f_distance):
     def create(name, **params):
         if name == 'ContrastiveLoss':
             return ContrastiveLoss(**params)
         else:
             raise AttributeError(f'Unknown loss: {name}')
 
-    return create(**conf['loss'])
+    return create(f_distance=f_distance, **conf['loss'])
 
 
 def get_optimiser(conf, model):
@@ -162,9 +217,10 @@ def train_embeddings(conf, nn_embedding, edges):
     max_node_count = conf['max_node_count']
     tree_batching_level = conf['tree_batching_level']
     device = torch.device(conf['device'])
+    model_prefix = conf['model_prefix']
 
     f_distance = get_distance(conf)
-    f_loss = get_loss(conf)
+    f_loss = get_loss(conf, f_distance)
     optim = get_optimiser(conf, nn_embedding)
 
     stat = {}
@@ -179,49 +235,35 @@ def train_embeddings(conf, nn_embedding, edges):
 
         with tqdm(total=(node_count + batch_size - 1) // batch_size, mininterval=1.0, miniters=10) as p:
             for i in range(0, node_count, batch_size):
-                # 6170 it\s
                 selected_nodes = node_indexes[i:i + batch_size]
                 for _ in range(tree_batching_level):
                     selected_nodes = achievable_nodes(selected_nodes, edges, max_node_count)
+                selected_nodes = selected_nodes.to(device)
                 #
-                # 1700 it\s
                 selected_node_count = len(selected_nodes)
                 update_stat('node_count', selected_node_count)
                 #
-                embeddings = nn_embedding(selected_nodes.to(device))
+                pos_ix = f_loss.get_pos_indexes(selected_nodes, edges)
+                if pos_ix is None:
+                    p.update(1)
+                    continue
+                update_stat('pos_count', len(pos_ix[0]))
                 #
-                # 1400 it\s
-                d = f_distance(embeddings)
+                neg_ix = f_loss.get_neg_indexes(nn_embedding, selected_nodes, pos_ix)
+                update_stat('neg_count', len(neg_ix[0]))
                 #
-                # 1100 it\s
-                rev_node_indexes[selected_nodes] = torch.arange(selected_node_count)
-                # 1000 it\s
-                a = torch.zeros(selected_node_count, selected_node_count)
-                # 300 it\s
-                ix_0, ix_1 = a_indexes(selected_nodes, edges)
-                update_stat('pos_count', len(ix_0))
-                # 130 it\s
-                ix_0 = rev_node_indexes[ix_0]
-                ix_1 = rev_node_indexes[ix_1]
-                a[ix_0, ix_1] = 1
-                a[ix_1, ix_0] = 1
-                a = a.to(device)
-                #
-                # 100 it\s
-                loss = f_loss(d, a)
+                loss = f_loss(nn_embedding, pos_ix, neg_ix)
                 update_stat('loss', loss.item())
                 #
-                # 100 it\s
                 optim.zero_grad()
                 loss.backward()
                 optim.step()
                 #
-                # 100 it\s
                 p.update(1)
                 stat_str = ', '.join([f'{k}: {v:.3f}' for k, v in stat.items()])
                 p.set_description(f'Epoch [{epoch:03}]: {stat_str}')
 
-        torch.save(nn_embedding, f'models/nn_embedding_{epoch:03}.p')
+        torch.save(nn_embedding, model_prefix + f'nn_embedding_{epoch:03}.p')
 
 
 if __name__ == '__main__':
@@ -242,27 +284,28 @@ if __name__ == '__main__':
     all_links = all_links.groupby([COL_CLIENT_ID, COL_TERM_ID]).sum().reset_index()
     logger.info(f'all_links shape: {all_links.shape}')
 
-    def print_hist(name, hist, total_count):
-        values, bins = hist
-        data = pd.Series(data=(values / total_count).round(6),
-                         index=[f'{a} - {b}' for a, b in zip(bins[:-1], bins[1:])])
-        logger.info(f'{name}:\n{data}')
+    if conf['print_stat']:
+        def print_hist(name, hist, total_count):
+            values, bins = hist
+            data = pd.Series(data=(values / total_count).round(6),
+                             index=[f'{a} - {b}' for a, b in zip(bins[:-1], bins[1:])])
+            logger.info(f'{name}:\n{data}')
 
-    _a = all_links[COL_CLIENT_ID].value_counts().values
-    _stat = np.histogram(_a, bins=(2**np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int))
-    print_hist('Links per client', _stat, len(_a))
+        _a = all_links[COL_CLIENT_ID].value_counts().values
+        _stat = np.histogram(_a, bins=(2**np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int))
+        print_hist('Links per client', _stat, len(_a))
 
-    _a = all_links[COL_TERM_ID].value_counts().values
-    _stat = np.histogram(_a, bins=(2 ** np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int))
-    print_hist('Links per term', _stat, len(_a))
+        _a = all_links[COL_TERM_ID].value_counts().values
+        _stat = np.histogram(_a, bins=(2 ** np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int))
+        print_hist('Links per term', _stat, len(_a))
 
-    _a = all_links[COL_COUNT].values
-    _stat = np.histogram(_a, bins=(2 ** np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int))
-    print_hist('Transactions count per edge', _stat, len(_a))
+        _a = all_links[COL_COUNT].values
+        _stat = np.histogram(_a, bins=(2 ** np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int))
+        print_hist('Transactions count per edge', _stat, len(_a))
 
-    _a = np.abs(all_links[COL_AMOUNT].values)
-    _stat = np.histogram(_a, bins=[0] + (2 ** np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int).tolist())
-    print_hist('Amount sum per edge', _stat, len(_a))
+        _a = np.abs(all_links[COL_AMOUNT].values)
+        _stat = np.histogram(_a, bins=[0] + (2 ** np.arange(0, np.ceil(np.log2(_a.max())) + 1)).astype(int).tolist())
+        print_hist('Amount sum per edge', _stat, len(_a))
 
     # drop
     _ix_to_save = all_links[COL_COUNT].gt(1)
@@ -288,7 +331,8 @@ if __name__ == '__main__':
     edges = prepare_links(all_links[[COL_CLIENT_ID, COL_TERM_ID]])
 
     logger.info('Train start')
-    torch.save(node_encoder, 'models/node_encoder.p')
+    model_prefix = conf['model_prefix']
+    torch.save(node_encoder, model_prefix + 'node_encoder.p')
     train_embeddings(conf, nn_embedding, edges)
-    torch.save(nn_embedding, 'models/nn_embedding.p')
+    torch.save(nn_embedding, model_prefix + 'nn_embedding.p')
     logger.info('Train end')

@@ -1,5 +1,6 @@
 {
     embedding_dim: 256
+    print_stat: false
 
     epoch_n: 10
     batch_size: 4
@@ -10,6 +11,8 @@
         name: ContrastiveLoss
         pos_margin: 0.1
         neg_margin: 1.0
+        total_node_count: 100000
+        max_neg_count: 10000
     }
     optimizer: {
         name: SGD
