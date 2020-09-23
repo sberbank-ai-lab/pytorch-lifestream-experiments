@@ -161,20 +161,24 @@ class ContrastiveLoss(torch.nn.Module):
             ix_1 = self.rev_node_indexes[ix_1]
             d[ix_0, ix_1] = float('nan')  # removing pos_ix
             d[ix_1, ix_0] = float('nan')  # removing pos_ix
-            d[~torch.ones(n, n, dtype=torch.bool).triu(diagonal=1)] = float('nan')
+            # d[torch.diag(torch.ones(n, dtype=torch.int16)).bool()] = float('nan')
+            #
+            # d_flat = d.view(-1)
+            # neg_pairs_count = (d_flat > 0).sum() // 2
+            # neg_margin = self.neg_margin
+            # if self.max_neg_count is not None and neg_pairs_count > self.max_neg_count:
+            #     indices = torch.argsort(d_flat)
+            #     new_margin = d_flat[indices[self.max_neg_count]]
+            #     if new_margin < neg_margin:
+            #         neg_margin = new_margin
 
-            d_flat = d.view(-1)
-            neg_pairs_count = (d_flat > 0).sum()
             neg_margin = self.neg_margin
-            if self.max_neg_count is not None and neg_pairs_count > self.max_neg_count:
-                indices = torch.argsort(d_flat)
-                new_margin = d_flat[indices[self.max_neg_count]]
-                if new_margin < neg_margin:
-                    neg_margin = new_margin
-
             ix = (neg_margin - d) > 0
 
             ix_0, ix_1 = ix.nonzero(as_tuple=True)
+            ix = ix_0 < ix_1
+            ix_0 = ix_0[ix]  # triu
+            ix_1 = ix_1[ix]
 
         return selected[ix_0], selected[ix_1]
 
@@ -261,7 +265,7 @@ def train_embeddings(conf, nn_embedding, edges):
                 #
                 p.update(1)
                 stat_str = ', '.join([f'{k}: {v:.3f}' for k, v in stat.items()])
-                p.set_description(f'Epoch [{epoch:03}]: {stat_str}')
+                p.set_description(f'Epoch [{epoch:03}]: {stat_str}', refresh=False)
 
         torch.save(nn_embedding, model_prefix + f'nn_embedding_{epoch:03}.p')
 
