@@ -83,7 +83,8 @@ def infer_part_of_data(part_num, part_data, columns, model, conf, lock_obj=None)
     _, pred = score_model(model, valid_loader, conf['params'])
 
     if conf['params.device'] != 'cpu':
-        torch.cuda.empty_cache()
+        with torch.cuda.device(conf['params.device']):
+            torch.cuda.empty_cache()
         logger.info('torch.cuda.empty_cache()')
     if lock_obj:
         lock_obj.release()
@@ -132,7 +133,8 @@ def infer_iterable(part_num, iterable_dataset, columns, model, conf, lock_obj=No
     ids, pred = score_model(model, valid_loader, conf['params'])
 
     if conf['params.device'] != 'cpu':
-        torch.cuda.empty_cache()
+        with torch.cuda.device(conf['params.device']):
+            torch.cuda.empty_cache()
         logger.info('torch.cuda.empty_cache()')
     if lock_obj:
         lock_obj.release()
@@ -245,10 +247,10 @@ def score_data(conf, y_true, y_predict):
     col_id = conf['output.columns'][0]
 
     model_type = conf['params.model_type']
-    if model_type == 'rnn':
+    if model_type in ('rnn', 'cpc_model'):
         cnt_features = conf['params.rnn.hidden_size']
     else:
-        raise AttributeError(f'Unknown model_type: "{metric_name}"')
+        raise AttributeError(f'Unknown model_type: "{model_type}"')
 
     y_predict = y_predict.set_index(col_id)
     y_true = pd.DataFrame([{col_id: rec[col_id], 'target': rec['target']} for rec in y_true])
@@ -257,7 +259,7 @@ def score_data(conf, y_true, y_predict):
     if metric_name == 'auroc':
         score = roc_auc_score(df['target'], df.iloc[:, 0])
     if metric_name == 'accuracy':
-        score = accuracy_score(df['target'], np.argmax(df.values, axis=1))
+        score = accuracy_score(df['target'], np.argmax(df[y_predict.columns].values, axis=1))
     return {
         metric_name: score,
         'cnt_samples': len(y_true),
