@@ -51,13 +51,24 @@ def prepare_links(all_links):
     return {**client_term, **term_client}
 
 
-def achievable_nodes(selected, edges, max_node_count):
-    nodes = set(selected.numpy().tolist())
-    for i in selected.numpy().tolist():
+def achievable_nodes_s(selected, edges, max_node_count):
+    nodes = set(selected)
+    for i in selected:
         nodes.update(set(edges.get(i, [])))
         if len(nodes) >= max_node_count:
             break
-    return torch.tensor(list(nodes)[:max_node_count])
+    return list(nodes)[:max_node_count]
+
+
+def achievable_nodes_t(selected, edges, max_node_count):
+    if len(selected) >= max_node_count:
+        return selected[:max_node_count]
+
+    ix_from = (edges[:, 0].view(-1, 1) == selected.view(1, -1)).any(dim=1)
+    new_nodes = edges[ix_from, 1]
+    all_new_nodes = torch.cat([selected, new_nodes])
+    selected = torch.unique(all_new_nodes)
+    return selected[:max_node_count]
 
 
 def a_indexes(selected, edges):
@@ -127,7 +138,7 @@ class ContrastiveLoss(torch.nn.Module):
         return loss
 
     @staticmethod
-    def get_pos_indexes(selected, edges):
+    def get_pos_indexes_s(selected, edges):
         def gen():
             for i in s_selected:
                 for j in edges.get(i, set()).intersection(s_selected):
@@ -144,7 +155,43 @@ class ContrastiveLoss(torch.nn.Module):
         a_ix = torch.tensor(a_ix).to(selected.device)
         return a_ix[:, 0], a_ix[:, 1]
 
-    def get_neg_indexes(self, embedding_model, selected, pos_ix):
+    @staticmethod
+    def get_pos_indexes_t(selected, edges):
+        with torch.no_grad():
+            n, _ = edges.size()
+            ix = edges.view(n, 2, 1) == selected.view(1, 1, -1)
+            ix = ix.any(dim=2).all(dim=1)
+        return edges[ix, 0], edges[ix, 1]
+
+    def get_neg_indexes_all_below_margin(self, embedding_model, selected, pos_ix):
+        with torch.no_grad():
+            selected_node_count = len(selected)
+            self.rev_node_indexes[selected] = torch.arange(selected_node_count)
+
+            all_embeddings = embedding_model(selected).detach()
+
+            n, s = all_embeddings.size()
+            a = all_embeddings.view(n, 1, s).repeat(1, n, 1).view(n * n, s)
+            b = all_embeddings.view(1, n, s).repeat(n, 1, 1).view(n * n, s)
+            # d = self.f_distance(a, b).view(n, n)  # 1:30
+            d = torch.zeros(n, n, dtype=torch.float, device=all_embeddings.device) + self.neg_margin + 1
+
+            ix_0, ix_1 = pos_ix
+            ix_0 = self.rev_node_indexes[ix_0]
+            ix_1 = self.rev_node_indexes[ix_1]
+            d[ix_0, ix_1] = float('nan')  # removing pos_ix
+
+            neg_margin = self.neg_margin
+            ix = (neg_margin - d) > 0
+
+            ix_0, ix_1 = ix.nonzero(as_tuple=True)
+            ix = ix_0 < ix_1
+            ix_0 = ix_0[ix]  # triu
+            ix_1 = ix_1[ix]
+
+        return selected[ix_0], selected[ix_1]
+
+    def get_neg_indexes_top_k(self, embedding_model, selected, pos_ix, k):
         with torch.no_grad():
             selected_node_count = len(selected)
             self.rev_node_indexes[selected] = torch.arange(selected_node_count)
@@ -159,28 +206,22 @@ class ContrastiveLoss(torch.nn.Module):
             ix_0, ix_1 = pos_ix
             ix_0 = self.rev_node_indexes[ix_0]
             ix_1 = self.rev_node_indexes[ix_1]
+
             d[ix_0, ix_1] = float('nan')  # removing pos_ix
             d[ix_1, ix_0] = float('nan')  # removing pos_ix
-            # d[torch.diag(torch.ones(n, dtype=torch.int16)).bool()] = float('nan')
-            #
-            # d_flat = d.view(-1)
-            # neg_pairs_count = (d_flat > 0).sum() // 2
-            # neg_margin = self.neg_margin
-            # if self.max_neg_count is not None and neg_pairs_count > self.max_neg_count:
-            #     indices = torch.argsort(d_flat)
-            #     new_margin = d_flat[indices[self.max_neg_count]]
-            #     if new_margin < neg_margin:
-            #         neg_margin = new_margin
+            ix_diag = torch.arange(n, device=d.device)
+            d[ix_diag, ix_diag] = float('nan')  # removing pos_ix
 
             neg_margin = self.neg_margin
-            ix = (neg_margin - d) > 0
+            d_neg = (neg_margin - d)
+            values, ix = torch.topk(d_neg, k, dim=1)
 
-            ix_0, ix_1 = ix.nonzero(as_tuple=True)
-            ix = ix_0 < ix_1
-            ix_0 = ix_0[ix]  # triu
-            ix_1 = ix_1[ix]
+            ix = ix[values > 0]
 
-        return selected[ix_0], selected[ix_1]
+        if len(ix) == 0:
+            return [], []
+        return selected[ix[0]], selected[ix[1]]
+
 
 
 def get_loss(conf, f_distance):
@@ -202,12 +243,12 @@ def get_optimiser(conf, model):
     return create(**conf['optimizer'])
 
 
-def train_embeddings(conf, nn_embedding, edges):
+def train_embeddings(conf, nn_embedding, s_edges):
     """
 
     :param conf:
     :param nn_embedding: simple torch embeddings
-    :param edges: {node: [list of connected nodes]}, all ids are ints, compatible with `nn_embedding` indexes
+    :param s_edges: {node: [list of connected nodes]}, all ids are ints, compatible with `nn_embedding` indexes
     :return:
     """
     def update_stat(k, v, alpha=0.999):
@@ -234,26 +275,46 @@ def train_embeddings(conf, nn_embedding, edges):
 
     nn_embedding.train()
 
+    t_edges = torch.tensor([[k, j] for k, v in s_edges.items() for j in v])
+    t_edges = t_edges.to(device)
+    logger.info(f'edges shape: {t_edges.shape}')
+
     for epoch in range(1, conf['epoch_n'] + 1):
         node_indexes = torch.multinomial(torch.ones(node_count), node_count, replacement=False).long()
 
         with tqdm(total=(node_count + batch_size - 1) // batch_size, mininterval=1.0, miniters=10) as p:
             for i in range(0, node_count, batch_size):
                 selected_nodes = node_indexes[i:i + batch_size]
+
+                # # for t_edges (01:36 sec)
+                # for _ in range(tree_batching_level):
+                #     selected_nodes = achievable_nodes_t(selected_nodes.to(device), t_edges, max_node_count)
+
+                # for s_edges (00:06 sec)
+                selected_nodes = selected_nodes.numpy().tolist()
                 for _ in range(tree_batching_level):
-                    selected_nodes = achievable_nodes(selected_nodes, edges, max_node_count)
-                selected_nodes = selected_nodes.to(device)
+                    selected_nodes = achievable_nodes_s(selected_nodes, s_edges, max_node_count)
+                selected_nodes = torch.tensor(selected_nodes).to(device)
                 #
                 selected_node_count = len(selected_nodes)
                 update_stat('node_count', selected_node_count)
                 #
-                pos_ix = f_loss.get_pos_indexes(selected_nodes, edges)
+                # for t_edges (05:42 sec)
+                # pos_ix = f_loss.get_pos_indexes_t(selected_nodes, t_edges)
+                # for s_edges (00:27 sec)
+                pos_ix = f_loss.get_pos_indexes_s(selected_nodes, s_edges)
+
                 if pos_ix is None:
                     p.update(1)
                     continue
                 update_stat('pos_count', len(pos_ix[0]))
-                #
-                neg_ix = f_loss.get_neg_indexes(nn_embedding, selected_nodes, pos_ix)
+
+                # (03:55 sec)
+                neg_ix = f_loss.get_neg_indexes_all_below_margin(nn_embedding, selected_nodes, pos_ix)
+
+                # (03:51 sec)
+                # neg_ix = f_loss.get_neg_indexes_top_k(nn_embedding, selected_nodes, pos_ix, 5)
+
                 update_stat('neg_count', len(neg_ix[0]))
                 #
                 loss = f_loss(nn_embedding, pos_ix, neg_ix)
