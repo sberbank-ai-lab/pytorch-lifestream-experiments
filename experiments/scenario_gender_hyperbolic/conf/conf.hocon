@@ -4,6 +4,7 @@
 
     epoch_n: 10
     batch_size: 16
+    num_workers: 12
     max_node_count: 800
     tree_batching_level: 2
     distance: l2
@@ -12,7 +13,6 @@
         pos_margin: 0.1
         neg_margin: 1.0
         total_node_count: 100000
-        max_neg_count: 10000
     }
     optimizer: {
         name: SGD

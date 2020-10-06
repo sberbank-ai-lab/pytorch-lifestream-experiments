@@ -8,6 +8,7 @@ from const import (
     DATA_PATH, TRX_FILE_NAME,
     COL_CLIENT_ID, COL_TERM_ID, COL_AMOUNT,
 )
+from data_loader import create_train_dataloader
 from dltranz.util import get_conf
 from split_dataset import load_source_data
 
@@ -51,24 +52,24 @@ def prepare_links(all_links):
     return {**client_term, **term_client}
 
 
-def achievable_nodes_s(selected, edges, max_node_count):
-    nodes = set(selected)
-    for i in selected:
-        nodes.update(set(edges.get(i, [])))
-        if len(nodes) >= max_node_count:
-            break
-    return list(nodes)[:max_node_count]
-
-
-def achievable_nodes_t(selected, edges, max_node_count):
-    if len(selected) >= max_node_count:
-        return selected[:max_node_count]
-
-    ix_from = (edges[:, 0].view(-1, 1) == selected.view(1, -1)).any(dim=1)
-    new_nodes = edges[ix_from, 1]
-    all_new_nodes = torch.cat([selected, new_nodes])
-    selected = torch.unique(all_new_nodes)
-    return selected[:max_node_count]
+# def achievable_nodes_s(selected, edges, max_node_count):
+#     nodes = set(selected)
+#     for i in selected:
+#         nodes.update(set(edges.get(i, [])))
+#         if len(nodes) >= max_node_count:
+#             break
+#     return list(nodes)[:max_node_count]
+#
+#
+# def achievable_nodes_t(selected, edges, max_node_count):
+#     if len(selected) >= max_node_count:
+#         return selected[:max_node_count]
+#
+#     ix_from = (edges[:, 0].view(-1, 1) == selected.view(1, -1)).any(dim=1)
+#     new_nodes = edges[ix_from, 1]
+#     all_new_nodes = torch.cat([selected, new_nodes])
+#     selected = torch.unique(all_new_nodes)
+#     return selected[:max_node_count]
 
 
 def a_indexes(selected, edges):
@@ -119,12 +120,11 @@ def get_distance(conf):
 
 
 class ContrastiveLoss(torch.nn.Module):
-    def __init__(self, f_distance, neg_margin, pos_margin, total_node_count, max_neg_count):
+    def __init__(self, f_distance, neg_margin, pos_margin, total_node_count):
         super().__init__()
         self.f_distance = f_distance
         self.neg_margin = neg_margin
         self.pos_margin = pos_margin
-        self.max_neg_count = max_neg_count
 
         self.rev_node_indexes = torch.zeros(total_node_count).long()
 
@@ -137,31 +137,31 @@ class ContrastiveLoss(torch.nn.Module):
         loss = loss.sum()
         return loss
 
-    @staticmethod
-    def get_pos_indexes_s(selected, edges):
-        def gen():
-            for i in s_selected:
-                for j in edges.get(i, set()).intersection(s_selected):
-                    if i < j:
-                        yield i, j
-                    if i > j:
-                        yield j, i
-
-        # TODO: move it to GPU
-        s_selected = set(selected.cpu().numpy().tolist())
-        a_ix = [(i, j) for i, j in gen()]
-        if len(a_ix) == 0:
-            return None
-        a_ix = torch.tensor(a_ix).to(selected.device)
-        return a_ix[:, 0], a_ix[:, 1]
-
-    @staticmethod
-    def get_pos_indexes_t(selected, edges):
-        with torch.no_grad():
-            n, _ = edges.size()
-            ix = edges.view(n, 2, 1) == selected.view(1, 1, -1)
-            ix = ix.any(dim=2).all(dim=1)
-        return edges[ix, 0], edges[ix, 1]
+    # @staticmethod
+    # def get_pos_indexes_s(selected, edges):
+    #     def gen():
+    #         for i in s_selected:
+    #             for j in edges.get(i, set()).intersection(s_selected):
+    #                 if i < j:
+    #                     yield i, j
+    #                 if i > j:
+    #                     yield j, i
+    #
+    #     # TODO: move it to GPU
+    #     s_selected = set(selected.cpu().numpy().tolist())
+    #     a_ix = [(i, j) for i, j in gen()]
+    #     if len(a_ix) == 0:
+    #         return None
+    #     a_ix = torch.tensor(a_ix).to(selected.device)
+    #     return a_ix[:, 0], a_ix[:, 1]
+    #
+    # @staticmethod
+    # def get_pos_indexes_t(selected, edges):
+    #     with torch.no_grad():
+    #         n, _ = edges.size()
+    #         ix = edges.view(n, 2, 1) == selected.view(1, 1, -1)
+    #         ix = ix.any(dim=2).all(dim=1)
+    #     return edges[ix, 0], edges[ix, 1]
 
     def get_neg_indexes_all_below_margin(self, embedding_model, selected, pos_ix):
         with torch.no_grad():
@@ -173,8 +173,7 @@ class ContrastiveLoss(torch.nn.Module):
             n, s = all_embeddings.size()
             a = all_embeddings.view(n, 1, s).repeat(1, n, 1).view(n * n, s)
             b = all_embeddings.view(1, n, s).repeat(n, 1, 1).view(n * n, s)
-            # d = self.f_distance(a, b).view(n, n)  # 1:30
-            d = torch.zeros(n, n, dtype=torch.float, device=all_embeddings.device) + self.neg_margin + 1
+            d = self.f_distance(a, b).view(n, n)  # 1:30
 
             ix_0, ix_1 = pos_ix
             ix_0 = self.rev_node_indexes[ix_0]
@@ -251,7 +250,7 @@ def train_embeddings(conf, nn_embedding, s_edges):
     :param s_edges: {node: [list of connected nodes]}, all ids are ints, compatible with `nn_embedding` indexes
     :return:
     """
-    def update_stat(k, v, alpha=0.999):
+    def update_stat(k, v, alpha=0.99):
         if k in stat:
             stat[k] = stat[k] * alpha + v * (1 - alpha)
         else:
@@ -263,6 +262,7 @@ def train_embeddings(conf, nn_embedding, s_edges):
     tree_batching_level = conf['tree_batching_level']
     device = torch.device(conf['device'])
     model_prefix = conf['model_prefix']
+    num_workers = conf['num_workers']
 
     f_distance = get_distance(conf)
     f_loss = get_loss(conf, f_distance)
@@ -279,42 +279,22 @@ def train_embeddings(conf, nn_embedding, s_edges):
     t_edges = t_edges.to(device)
     logger.info(f'edges shape: {t_edges.shape}')
 
+    data_loader = create_train_dataloader(
+        node_count, s_edges, batch_size, tree_batching_level, max_node_count, num_workers)
     for epoch in range(1, conf['epoch_n'] + 1):
-        node_indexes = torch.multinomial(torch.ones(node_count), node_count, replacement=False).long()
-
         with tqdm(total=(node_count + batch_size - 1) // batch_size, mininterval=1.0, miniters=10) as p:
-            for i in range(0, node_count, batch_size):
-                selected_nodes = node_indexes[i:i + batch_size]
-
-                # # for t_edges (01:36 sec)
-                # for _ in range(tree_batching_level):
-                #     selected_nodes = achievable_nodes_t(selected_nodes.to(device), t_edges, max_node_count)
-
-                # for s_edges (00:06 sec)
-                selected_nodes = selected_nodes.numpy().tolist()
-                for _ in range(tree_batching_level):
-                    selected_nodes = achievable_nodes_s(selected_nodes, s_edges, max_node_count)
-                selected_nodes = torch.tensor(selected_nodes).to(device)
-                #
+            for selected_nodes, pos_ix in data_loader:
+                selected_nodes = selected_nodes.to(device)
                 selected_node_count = len(selected_nodes)
                 update_stat('node_count', selected_node_count)
-                #
-                # for t_edges (05:42 sec)
-                # pos_ix = f_loss.get_pos_indexes_t(selected_nodes, t_edges)
-                # for s_edges (00:27 sec)
-                pos_ix = f_loss.get_pos_indexes_s(selected_nodes, s_edges)
 
                 if pos_ix is None:
                     p.update(1)
                     continue
                 update_stat('pos_count', len(pos_ix[0]))
-
-                # (03:55 sec)
+                pos_ix = tuple(t.to(device) for t in pos_ix)
+                #
                 neg_ix = f_loss.get_neg_indexes_all_below_margin(nn_embedding, selected_nodes, pos_ix)
-
-                # (03:51 sec)
-                # neg_ix = f_loss.get_neg_indexes_top_k(nn_embedding, selected_nodes, pos_ix, 5)
-
                 update_stat('neg_count', len(neg_ix[0]))
                 #
                 loss = f_loss(nn_embedding, pos_ix, neg_ix)
