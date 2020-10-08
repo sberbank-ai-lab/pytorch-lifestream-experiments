@@ -5,11 +5,12 @@
     data_prepare: {
         min_trx_per_edge: 5
     }
-    epoch_n: 10
+    epoch_n: 1000
     batch_size: 16
     valid: {
-        batch_size: 1024
-        neg_sampling_rate: 16
+        batch_size: 80
+        neg_top_k: 6
+        epoch_step: 10
     }
     num_workers: 12
     max_node_count: 800

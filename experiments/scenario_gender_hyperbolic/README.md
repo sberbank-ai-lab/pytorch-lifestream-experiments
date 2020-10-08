@@ -1,36 +1,13 @@
 Run this code
 
 ```sh
-export SC_SUFFIX="l2_tree_batching_level_1"
+export SC_SUFFIX="base_"
 PYTHONPATH="../../" python train_graph_embeddings.py \
     device=${SC_DEVICE} \
-    epoch_n=100 \
-    tree_batching_level=1 batch_size=96 \
-    distance="l2" \
     model_prefix="models/${SC_SUFFIX}_" \
     --conf conf/conf.hocon
 
-for SC_EPOCH in 001 010 020 030 040 050 060 070 080 090 100
-do
-    PYTHONPATH="../../" python inference.py \
-        node_encoder="models/${SC_SUFFIX}_node_encoder.p" \
-        nn_embeddings="models/${SC_SUFFIX}_nn_embedding_${SC_EPOCH}.p" \
-        output="data/embedding_${SC_SUFFIX}_${SC_EPOCH}.csv" \
-        target_path="data/gender_train.csv"
-done
-
-
-export SC_SUFFIX="l2_tree_batching_level_3"
-PYTHONPATH="../../" python train_graph_embeddings.py \
-    device=${SC_DEVICE} \
-    epoch_n=100 \
-    tree_batching_level=3 batch_size=4 \
-    distance="l2" \
-    model_prefix="models/${SC_SUFFIX}_" \
-    --conf conf/conf.hocon
-export SC_SUFFIX="l2_tree_batching_level_3"
-
-for SC_EPOCH in 001 010 020 030 040 050 060 070 080 090 100
+for SC_EPOCH in 0001 0010 0100 0200 0300 0400 0500 0600 0700 0800 0900 1000
 do
     PYTHONPATH="../../" python inference.py \
         node_encoder="models/${SC_SUFFIX}_node_encoder.p" \

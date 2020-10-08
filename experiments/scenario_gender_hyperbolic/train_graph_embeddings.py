@@ -83,8 +83,8 @@ def validate(conf, nn_embedding, s_edges):
             for j in s_edges.get(i, set()):
                 if i < j:
                     yield i, j
-                # if i > j:
-                #     yield j, i
+                if i > j:
+                    yield j, i
 
     a_ix = [(i, j) for i, j in gen()]
     if len(a_ix) == 0:
@@ -94,38 +94,74 @@ def validate(conf, nn_embedding, s_edges):
     node_count = nn_embedding.num_embeddings
     device = torch.device(conf['device'])
     valid_batch_size = conf['valid.batch_size']
-    valid_neg_sampling_rate = conf['valid.neg_sampling_rate']
+    valid_neg_top_k = conf['valid.neg_top_k']
     f_distance = get_distance(conf)
 
     nn_embedding.eval()
     all_pos_distances = []
-    all_distances = []
+    all_neg_distances = []
+    pos_hit_sum = 0.0
+    pos_hit_cnt = 0.0
+
     with torch.no_grad():
         for i in tqdm(range(0, len(a_ix), valid_batch_size), leave=False):
             ix = a_ix[i:i + valid_batch_size].to(device)
             d = f_distance(nn_embedding(ix[:, 0]), nn_embedding(ix[:, 1]))
             all_pos_distances.append(d.cpu().numpy())
 
-        step = valid_batch_size // valid_neg_sampling_rate
-        ix = torch.arange(node_count)
-        for i in tqdm(range(0, node_count, step), leave=False):
-            ix_0 = ix[i:i + step].to(device).repeat(valid_neg_sampling_rate)
-            ix_1 = torch.multinomial(torch.ones(node_count), len(ix_0), replacement=True).to(device)
-            _ix_ne = ix_0 != ix_1
-            d = f_distance(nn_embedding(ix_0[_ix_ne]), nn_embedding(ix_1[_ix_ne]))
-            all_distances.append(d.cpu().numpy())
+        ix = torch.arange(node_count).to(device)
+        all_embeddings = nn_embedding(ix)
+        _, H = all_embeddings.size()
+
+        for i in tqdm(range(0, node_count, valid_batch_size), leave=False):
+            selected_nodes = ix[i:i + valid_batch_size]
+            B = len(selected_nodes)
+
+            d = f_distance(
+                all_embeddings[i:i + valid_batch_size].unsqueeze(1).repeat(1, node_count, 1).
+                    view(B * node_count, H),
+                all_embeddings.unsqueeze(0).repeat(B, 1, 1).view(B * node_count, H)
+            ).view(B, node_count)
+            d[selected_nodes - i, selected_nodes] = float('nan')  # remove self
+
+            top_k_indices = torch.topk(d, k=valid_neg_top_k, dim=1, largest=False).indices
+            z = torch.zeros(B, node_count)
+
+            for node_i in selected_nodes:
+                node_j = list(s_edges.get(node_i.item(), set()))
+                d[node_i - i, node_j] = float('nan')
+                z[node_i - i, node_j] = 1
+
+            all_neg_distances.append(torch.topk(d, k=valid_neg_top_k, dim=1, largest=False).
+                                     values.view(-1).cpu().numpy())
+
+            pos_hit_sum += z[
+                torch.arange(len(top_k_indices)).view(-1, 1).repeat(1, valid_neg_top_k).view(-1),
+                top_k_indices.view(-1),
+            ].sum().item()
+            pos_hit_cnt += z.sum().item()
 
     all_pos_distances = np.concatenate(all_pos_distances)
-    values = np.arange(0, 1.1, 0.1)
-    bins = np.percentile(all_pos_distances, values * 100)
-    _stat = np.diff(values), bins
-    print_hist('All pos distances', _stat, 1)
+    all_neg_distances = np.concatenate(all_neg_distances)
+    logger.info(f'Validation: {len(all_pos_distances)} pos samples {len(all_neg_distances)} neg samples. '
+                f'Pos hit: {pos_hit_sum / pos_hit_cnt:.5f}')
 
-    all_distances = np.concatenate(all_distances)
-    values = np.arange(0, 1.1, 0.1)
-    bins = np.percentile(all_distances, values * 100)
-    _stat = np.diff(values), bins
-    print_hist('All distances', _stat, 1)
+    bins = np.linspace(
+        min(all_pos_distances.min(), all_neg_distances.min()),
+        max(all_pos_distances.max(), all_neg_distances.max()),
+        10,
+    )
+    values_pos, _ = np.histogram(all_pos_distances, bins=bins)
+    values_neg, _ = np.histogram(all_neg_distances, bins=bins)
+
+    data = pd.DataFrame(data={
+        'pos': values_pos,
+        'neg': values_neg,
+        'pos_pp': np.round(values_pos / len(all_pos_distances), 2),
+        'neg_pp': np.round(values_neg / len(all_neg_distances), 2),
+    },
+                        index=[f'{a:7.3f} - {b:7.3f}' for a, b in zip(bins[:-1], bins[1:])])
+    logger.info(f'Distances:\n{data}')
 
 
 def train_embeddings(conf, nn_embedding, s_edges):
@@ -149,6 +185,7 @@ def train_embeddings(conf, nn_embedding, s_edges):
     device = torch.device(conf['device'])
     model_prefix = conf['model_prefix']
     num_workers = conf['num_workers']
+    valid_epoch_step = conf['valid.epoch_step']
 
     f_loss = get_loss(conf)
     optim = get_optimiser(conf, nn_embedding)
@@ -193,7 +230,8 @@ def train_embeddings(conf, nn_embedding, s_edges):
                 stat_str = ', '.join([f'{k}: {v:.3f}' for k, v in stat.items()])
                 p.set_description(f'Epoch [{epoch:03}]: {stat_str}', refresh=False)
 
-        validate(conf, nn_embedding, s_edges)
+        if epoch % valid_epoch_step == 0:
+            validate(conf, nn_embedding, s_edges)
         torch.save(nn_embedding, model_prefix + f'nn_embedding_{epoch:03}.p')
 
 
