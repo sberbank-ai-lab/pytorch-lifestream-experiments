@@ -1,6 +1,10 @@
 import torch
+from pip._internal.utils import logging
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset
+
+
+logger = logging.getLogger(__name__)
 
 
 class GraphDataset(Dataset):
@@ -46,8 +50,8 @@ class GraphBatchCollector:
                 for j in self.edges.get(i, set()).intersection(s_selected):
                     if i < j:
                         yield i, j
-                    if i > j:
-                        yield j, i
+                    # if i > j:
+                    #     yield j, i
 
         s_selected = set(selected)
         a_ix = [(i, j) for i, j in gen()]
@@ -61,6 +65,7 @@ def create_train_dataloader(node_count, s_edges, batch_size, tree_batching_level
     dataset = GraphDataset(node_count)
     collate_fn = GraphBatchCollector(s_edges, tree_batching_level, max_node_count)
 
+    logger.info(f'Created DataLoader with {num_workers} workers')
     return DataLoader(
         dataset=dataset,
         batch_size=batch_size,

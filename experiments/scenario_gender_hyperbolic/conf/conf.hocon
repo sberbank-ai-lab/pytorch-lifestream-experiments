@@ -2,8 +2,15 @@
     embedding_dim: 256
     print_stat: false
 
+    data_prepare: {
+        min_trx_per_edge: 5
+    }
     epoch_n: 10
     batch_size: 16
+    valid: {
+        batch_size: 1024
+        neg_sampling_rate: 16
+    }
     num_workers: 12
     max_node_count: 800
     tree_batching_level: 2
