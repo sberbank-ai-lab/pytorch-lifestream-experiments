@@ -21,6 +21,7 @@
         pos_margin: 0.1
         neg_margin: 1.0
         total_node_count: 100000
+        neg_mode: all_below_margin
     }
     optimizer: {
         name: SGD

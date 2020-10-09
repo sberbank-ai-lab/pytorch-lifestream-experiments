@@ -1,11 +1,7 @@
 Run this code
 
-# base 0.02215 after 10 epochs
-
 ```sh
-export SC_SUFFIX="base"
-
-export SC_SUFFIX="lr_0_001"
+export SC_SUFFIX="lr_0_001"   # this is new base
 PYTHONPATH="../../" python train_graph_embeddings.py \
     device=${SC_DEVICE} \
     model_prefix="models/${SC_SUFFIX}_" \
@@ -13,6 +9,7 @@ PYTHONPATH="../../" python train_graph_embeddings.py \
     optimizer.lr=0.001 \
     --conf conf/conf.hocon
 
+# done-break
 export SC_SUFFIX="lr_0_001_tree_batching_level_4"
 PYTHONPATH="../../" python train_graph_embeddings.py \
     device=${SC_DEVICE} \
@@ -22,10 +19,50 @@ PYTHONPATH="../../" python train_graph_embeddings.py \
     batch_size=4 tree_batching_level=4 \
     --conf conf/conf.hocon
 
+# cuda:0
+export SC_SUFFIX="lr_0_001_topk_loss"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}_" \
+    valid.epoch_step=5 \
+    loss.neg_mode="top_k" loss.k=32 loss.neg_margin=12.0 \
+    --conf conf/conf.hocon
+
+# done
+export SC_SUFFIX="lr_0_001_treelevel_1"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}_" \
+    valid.epoch_step=20 epoch_n=2000 \
+    tree_batching_level=1 batch_size=64 \
+    --conf conf/conf.hocon
+
+# cuda:1
+# fast result on 100 epoch
+export SC_SUFFIX="lr_0_001_treelevel_1_margin_12"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}_" \
+    valid.epoch_step=20 epoch_n=1000 \
+    tree_batching_level=1 batch_size=64 \
+    loss.neg_margin=12.0 \
+    --conf conf/conf.hocon
+
+# cuda:2
+export SC_SUFFIX="lr_0_001_allneg_margin_12"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}_" \
+    valid.epoch_step=10 \
+    loss.neg_margin=12.0 \
+    --conf conf/conf.hocon
 
 
-export SC_SUFFIX="base"
-for SC_EPOCH in 001 010 100 200 300 400 500 600 700 800 900 1000
+
+####### Get embeddings and validate
+
+export SC_SUFFIX="lr_0_001_treelevel_1_margin_12"
+for SC_EPOCH in 0001 0010 0100 0200 0300 0400 0500 0600 0700 0800 0900 1000
 do
     PYTHONPATH="../../" python inference.py \
         node_encoder="models/${SC_SUFFIX}_node_encoder.p" \
@@ -44,10 +81,3 @@ less -S results/check.txt
 
 ```
 
-Todo:
-- make batch bigger and train faster
-
-
- 0  02:02  90%
- 1  01:57  92%
- 

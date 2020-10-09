@@ -139,7 +139,8 @@ def validate(conf, nn_embedding, s_edges):
                 torch.arange(len(top_k_indices)).view(-1, 1).repeat(1, valid_neg_top_k).view(-1),
                 top_k_indices.view(-1),
             ].sum().item()
-            pos_hit_cnt += z.sum().item()
+            # pos_hit_cnt += z.sum().item()  # limit z.sum() -> z.sum(dim=1).clamp(0, valid_neg_top_k).sum()
+            pos_hit_cnt += z.sum(dim=1).clamp(0, valid_neg_top_k).sum()
 
     all_pos_distances = np.concatenate(all_pos_distances)
     all_neg_distances = np.concatenate(all_neg_distances)
@@ -216,7 +217,7 @@ def train_embeddings(conf, nn_embedding, s_edges):
                 update_stat('pos_count', len(pos_ix[0]))
                 pos_ix = tuple(t.to(device) for t in pos_ix)
                 #
-                neg_ix = f_loss.get_neg_indexes_all_below_margin(nn_embedding, selected_nodes, pos_ix)
+                neg_ix = f_loss.get_neg_indexes(nn_embedding, selected_nodes, pos_ix)
                 update_stat('neg_count', len(neg_ix[0]))
                 #
                 loss = f_loss(nn_embedding, pos_ix, neg_ix)
@@ -228,7 +229,7 @@ def train_embeddings(conf, nn_embedding, s_edges):
                 #
                 p.update(1)
                 stat_str = ', '.join([f'{k}: {v:.3f}' for k, v in stat.items()])
-                p.set_description(f'Epoch [{epoch:03}]: {stat_str}', refresh=False)
+                p.set_description(f'Epoch [{epoch:04}]: {stat_str}', refresh=False)
 
         if epoch % valid_epoch_step == 0:
             validate(conf, nn_embedding, s_edges)

@@ -35,11 +35,13 @@ def get_distance(conf):
 
 
 class ContrastiveLoss(torch.nn.Module):
-    def __init__(self, f_distance, neg_margin, pos_margin, total_node_count):
+    def __init__(self, f_distance, neg_margin, pos_margin, total_node_count, neg_mode, k=None):
         super().__init__()
         self.f_distance = f_distance
         self.neg_margin = neg_margin
         self.pos_margin = pos_margin
+        self.neg_mode = neg_mode
+        self.k = k
 
         self.rev_node_indexes = torch.zeros(total_node_count).long()
 
@@ -78,6 +80,15 @@ class ContrastiveLoss(torch.nn.Module):
     #         ix = ix.any(dim=2).all(dim=1)
     #     return edges[ix, 0], edges[ix, 1]
 
+    def get_neg_indexes(self, embedding_model, selected, pos_ix):
+        if self.neg_mode == 'all_below_margin':
+            return self.get_neg_indexes_all_below_margin(embedding_model, selected, pos_ix)
+        elif self.neg_mode == 'top_k':
+            return self.get_neg_indexes_top_k(embedding_model, selected, pos_ix)
+        else:
+            raise AttributeError(f'Unknown neg_mode: {self.neg_mode}')
+
+
     def get_neg_indexes_all_below_margin(self, embedding_model, selected, pos_ix):
         with torch.no_grad():
             selected_node_count = len(selected)
@@ -105,7 +116,8 @@ class ContrastiveLoss(torch.nn.Module):
 
         return selected[ix_0], selected[ix_1]
 
-    def get_neg_indexes_top_k(self, embedding_model, selected, pos_ix, k):
+    def get_neg_indexes_top_k(self, embedding_model, selected, pos_ix):
+        k = self.k
         with torch.no_grad():
             selected_node_count = len(selected)
             self.rev_node_indexes[selected] = torch.arange(selected_node_count)
@@ -113,6 +125,9 @@ class ContrastiveLoss(torch.nn.Module):
             all_embeddings = embedding_model(selected).detach()
 
             n, s = all_embeddings.size()
+            if k > n - 1:
+                k = n - 1
+
             a = all_embeddings.view(n, 1, s).repeat(1, n, 1).view(n * n, s)
             b = all_embeddings.view(1, n, s).repeat(n, 1, 1).view(n * n, s)
             d = self.f_distance(a, b).view(n, n)
@@ -128,13 +143,13 @@ class ContrastiveLoss(torch.nn.Module):
 
             neg_margin = self.neg_margin
             d_neg = (neg_margin - d)
-            values, ix = torch.topk(d_neg, k, dim=1)
+            values, ix_1 = torch.topk(d_neg, k, dim=1)
+            ix_0 = torch.arange(n).view(-1, 1).repeat(1, k)
 
-            ix = ix[values > 0]
+            ix_0 = ix_0[values > 0]
+            ix_1 = ix_1[values > 0]
 
-        if len(ix) == 0:
-            return [], []
-        return selected[ix[0]], selected[ix[1]]
+        return selected[ix_0], selected[ix_1]
 
 
 def get_loss(conf):
