@@ -232,7 +232,7 @@ def train_embeddings(conf, nn_embedding, s_edges):
 
         if epoch % valid_epoch_step == 0:
             validate(conf, nn_embedding, s_edges)
-        torch.save(nn_embedding, model_prefix + f'nn_embedding_{epoch:03}.p')
+        torch.save(nn_embedding, model_prefix + f'nn_embedding_{epoch:04}.p')
 
 
 if __name__ == '__main__':

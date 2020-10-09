@@ -1,13 +1,31 @@
 Run this code
 
+# base 0.02215 after 10 epochs
+
 ```sh
-export SC_SUFFIX="base_"
+export SC_SUFFIX="base"
+
+export SC_SUFFIX="lr_0_001"
 PYTHONPATH="../../" python train_graph_embeddings.py \
     device=${SC_DEVICE} \
     model_prefix="models/${SC_SUFFIX}_" \
+    valid.epoch_step=5 \
+    optimizer.lr=0.001 \
     --conf conf/conf.hocon
 
-for SC_EPOCH in 0001 0010 0100 0200 0300 0400 0500 0600 0700 0800 0900 1000
+export SC_SUFFIX="lr_0_001_tree_batching_level_4"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}_" \
+    valid.epoch_step=5 \
+    optimizer.lr=0.001 \
+    batch_size=4 tree_batching_level=4 \
+    --conf conf/conf.hocon
+
+
+
+export SC_SUFFIX="base"
+for SC_EPOCH in 001 010 100 200 300 400 500 600 700 800 900 1000
 do
     PYTHONPATH="../../" python inference.py \
         node_encoder="models/${SC_SUFFIX}_node_encoder.p" \
@@ -15,7 +33,6 @@ do
         output="data/embedding_${SC_SUFFIX}_${SC_EPOCH}.csv" \
         target_path="data/gender_train.csv"
 done
-
 
 rm results/check.txt 
 # rm -r conf/check.work/
