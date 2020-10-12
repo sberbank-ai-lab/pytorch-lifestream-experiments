@@ -5,21 +5,21 @@
     data_prepare: {
         min_trx_per_edge: 5
     }
-    epoch_n: 1000
-    batch_size: 16
+    epoch_n: 1600
+    batch_size: 64
     valid: {
         batch_size: 80
         neg_top_k: 6
-        epoch_step: 10
+        epoch_step: 20
     }
     num_workers: 12
     max_node_count: 800
-    tree_batching_level: 2
+    tree_batching_level: 1
     distance: l2
     loss: {
         name: ContrastiveLoss
         pos_margin: 0.1
-        neg_margin: 1.0
+        neg_margin: 12.0
         total_node_count: 100000
         neg_mode: all_below_margin
     }
