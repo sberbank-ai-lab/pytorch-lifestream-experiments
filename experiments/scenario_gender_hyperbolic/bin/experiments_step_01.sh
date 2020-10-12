@@ -1,6 +1,3 @@
-Run this code
-
-```sh
 # embedding_lr_0_001_500                           *** 0.542 0.016   0.526   0.559 0.013  [0.541 0.524 0.547 0.560 0.538]       0.512 0.009   0.503   0.522 0.008  [0.508 0.517 0.506 0.508 0.523]
 export SC_SUFFIX="lr_0_001"   # this is new base
 PYTHONPATH="../../" python train_graph_embeddings.py \
@@ -96,6 +93,3 @@ LUIGI_CONFIG_PATH="conf/luigi.cfg" \
     --workers 5 --total_cpu_count 18 \
     --conf_extra 'auto_features: ["../data/embedding_*.csv"]'
 less -S results/check.txt
-
-```
-
