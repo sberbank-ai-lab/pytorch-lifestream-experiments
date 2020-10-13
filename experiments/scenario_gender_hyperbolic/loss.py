@@ -25,11 +25,30 @@ def get_distance(conf):
         t = 1 + 2 * t
         return acosh(t)
 
+    def pairwise_hyperbola_distance(a, b):
+        z_a = (a.pow(2).sum(dim=1) + 1).pow(0.5)
+        z_b = (b.pow(2).sum(dim=1) + 1).pow(0.5)
+
+        t = z_a * z_b - (a * b).sum(dim=1)
+        return acosh(t)
+
+    def l2_to_sphere(d):
+        return d.div((d.pow(2).sum(dim=1, keepdim=True) + 1e-9).pow(0.5))
+
+    def pairwise_sphere_distance(a, b):
+        a = l2_to_sphere(a)
+        b = l2_to_sphere(b)
+        return pairwise_l2_distance(a, b)
+
     distance = conf['distance']
     if distance == 'l2':
         return pairwise_l2_distance
     elif distance == 'poincare':
         return pairwise_poincare_distance
+    elif distance == 'hyperbola':
+        return pairwise_hyperbola_distance
+    elif distance == 'sphere':
+        return pairwise_sphere_distance
     else:
         raise AttributeError(f'Unknown distance: {distance}')
 
