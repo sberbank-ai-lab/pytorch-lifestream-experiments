@@ -8,7 +8,7 @@ from dltranz.util import get_conf
 
 from const import COL_CLIENT_ID
 
-from train_graph_embeddings import NodeEncoder
+from train_graph_embeddings import NodeEncoder, NNEmbeddigs
 
 logger = logging.getLogger(__name__)
 

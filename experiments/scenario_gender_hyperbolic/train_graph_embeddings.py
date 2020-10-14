@@ -55,6 +55,38 @@ class NodeEncoder:
         return len(self._client_to_node) + len(self._term_to_node) + 2
 
 
+class NNEmbeddigs(torch.nn.Module):
+    def __init__(self, node_count, conf):
+        super().__init__()
+
+        self.embedding_dim = conf['embedding_dim']
+
+        self.norm_embedding_weights = conf['norm_embedding_weights']
+        distance = conf['distance']
+
+        self.model = torch.nn.Embedding(node_count, self.embedding_dim)
+        if self.norm_embedding_weights:
+            with torch.no_grad():
+                if distance == 'l2':
+                    pass
+                elif distance == 'poincare':
+                    pass
+                elif distance == 'hyperbola':
+                    pass
+                elif distance == 'sphere':
+                    _norm = (self.model.weight.data.pow(2).sum(dim=1, keepdim=True) + 1e-6).pow(0.5)
+                    self.model.weight.data = self.model.weight.data / _norm
+                else:
+                    raise AttributeError(f'Unknown distance: {distance}')
+
+    @property
+    def num_embeddings(self):
+        return self.model.num_embeddings
+
+    def forward(self, x):
+        return self.model(x)
+
+
 def prepare_links(all_links):
     client_term = all_links.groupby(COL_CLIENT_ID)[COL_TERM_ID].agg(set).to_dict()
     term_client = all_links.groupby(COL_TERM_ID)[COL_CLIENT_ID].agg(set).to_dict()
@@ -292,7 +324,7 @@ if __name__ == '__main__':
     all_links[COL_CLIENT_ID] = node_encoder.encode_client(all_links[COL_CLIENT_ID])
     all_links[COL_TERM_ID] = node_encoder.encode_term(all_links[COL_TERM_ID])
 
-    nn_embedding = torch.nn.Embedding(node_encoder.node_count, conf['embedding_dim'])
+    nn_embedding = NNEmbeddigs(node_encoder.node_count, conf)
     edges = prepare_links(all_links[[COL_CLIENT_ID, COL_TERM_ID]])
 
     logger.info('Train start')
@@ -301,3 +333,4 @@ if __name__ == '__main__':
     train_embeddings(conf, nn_embedding, edges)
     torch.save(nn_embedding, model_prefix + 'nn_embedding.p')
     logger.info('Train end')
+
