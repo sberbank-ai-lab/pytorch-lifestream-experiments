@@ -1,8 +1,8 @@
 {
     environment: {
-        work_dir: "check.work"
+        work_dir: "check_downstream.work"
     }
-    report_file: "../results/check.txt"
+    report_file: "../results/check_downstream.txt"
 
     target: {
         file_name: "../data/gender_train.csv"

@@ -1,4 +1,7 @@
+import json
 import logging
+import os
+
 import numpy as np
 import pandas as pd
 import torch
@@ -65,12 +68,14 @@ class NNEmbeddigs(torch.nn.Module):
         self.distance = conf['distance']
 
         self.model = torch.nn.Embedding(node_count, self.embedding_dim)
+        self.weight_correction()
 
     def weight_correction(self):
         if self.norm_embedding_weights:
             with torch.no_grad():
                 if self.distance == 'l2':
-                    pass
+                    _norm = (2 * self.embedding_dim) ** 0.5
+                    self.model.weight.data = self.model.weight.data / _norm
                 elif self.distance == 'poincare':
                     _norm = (2 * self.embedding_dim) ** 0.5
                     self.model.weight.data = self.model.weight.data / _norm
@@ -199,6 +204,7 @@ def validate(conf, nn_embedding, s_edges):
     },
                         index=[f'{a:7.3f} - {b:7.3f}' for a, b in zip(bins[:-1], bins[1:])])
     logger.info(f'Distances:\n{data}')
+    return float((pos_hit_sum / pos_hit_cnt).item())
 
 
 def train_embeddings(conf, nn_embedding, s_edges):
@@ -215,6 +221,26 @@ def train_embeddings(conf, nn_embedding, s_edges):
         else:
             stat[k] = v
 
+    def update_log(epoch_n, **scores):
+        log_file = conf['log_file.path']
+        if os.path.isfile(log_file):
+            with open(log_file, 'r') as f:
+                log_info = json.load(f)
+        else:
+            log_info = []
+
+        log_entry = {
+            "fold_id": 0,
+            "model_name": conf['log_file.model_name'],
+            "feature_name": conf['log_file.feature_name'] + f'_{epoch_n:04d}',
+            "scores_valid": scores,
+            "scores_test": {k: float('NaN') for k in scores.keys()}
+        }
+        log_info.append(log_entry)
+        with open(log_file, 'w') as f:
+            json.dump(log_info, f)
+
+
     node_count = nn_embedding.num_embeddings
     batch_size = conf['batch_size']
     max_node_count = conf['max_node_count']
@@ -222,7 +248,7 @@ def train_embeddings(conf, nn_embedding, s_edges):
     device = torch.device(conf['device'])
     model_prefix = conf['model_prefix']
     num_workers = conf['num_workers']
-    valid_epoch_step = conf['valid.epoch_step']
+    valid_epoch_steps = conf['valid.epoch_steps']
 
     f_loss = get_loss(conf)
     optim = get_optimiser(conf, nn_embedding)
@@ -238,9 +264,18 @@ def train_embeddings(conf, nn_embedding, s_edges):
     data_loader = create_train_dataloader(
         node_count, s_edges, batch_size, tree_batching_level, max_node_count, num_workers)
 
-    nn_embedding.weight_correction()
+    pos_hit = validate(conf, nn_embedding, s_edges)
+    update_log(0, pos_hit=pos_hit)
 
-    validate(conf, nn_embedding, s_edges)
+    def grad_norm(x):
+        with torch.no_grad():
+            gn = x.pow(2).sum(dim=1).pow(0.5)
+            update_stat('emb_gn_mean', gn.mean().item())
+            update_stat('emb_gn_max', gn.max().item())
+        return x
+
+    nn_embedding.model.weight.register_hook(grad_norm)
+
     for epoch in range(1, conf['epoch_n'] + 1):
         nn_embedding.train()
         with tqdm(total=(node_count + batch_size - 1) // batch_size, mininterval=1.0, miniters=10) as p:
@@ -269,8 +304,10 @@ def train_embeddings(conf, nn_embedding, s_edges):
                 stat_str = ', '.join([f'{k}: {v:.3f}' for k, v in stat.items()])
                 p.set_description(f'Epoch [{epoch:04}]: {stat_str}', refresh=False)
 
+        valid_epoch_step = [(e, s) for e, s in valid_epoch_steps if e < epoch][-1][1]
         if epoch % valid_epoch_step == 0:
-            validate(conf, nn_embedding, s_edges)
+            pos_hit = validate(conf, nn_embedding, s_edges)
+            update_log(epoch, pos_hit=pos_hit)
         torch.save(nn_embedding, model_prefix + f'nn_embedding_{epoch:04}.p')
 
 

@@ -1,7 +1,7 @@
 import logging
 
 import torch
-
+import os
 import pandas as pd
 
 from dltranz.util import get_conf
@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(funcName)-20s   : %(message)s')
     conf = get_conf()
+
+    if os.path.isfile(conf['output']):
+        logger.info(f'File "{conf["output"]}" already exists')
+        if not conf.get('overwrite', False):
+            exit(0)
+
+    if not os.path.isfile(conf['nn_embeddings']):
+        logger.error(f'File "{conf["nn_embeddings"]}" is not exists')
+        exit(-1)
 
     node_incoder = torch.load(conf['node_encoder'], map_location='cpu')
     nn_embeddings = torch.load(conf['nn_embeddings'], map_location='cpu')

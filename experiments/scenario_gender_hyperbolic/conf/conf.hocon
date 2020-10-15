@@ -1,6 +1,6 @@
 {
-    embedding_dim: 256
-    norm_embedding_weights: false
+    embedding_dim: 128
+    norm_embedding_weights: true
     print_stat: false
 
     data_prepare: {
@@ -9,9 +9,9 @@
     epoch_n: 1600
     batch_size: 64
     valid: {
-        batch_size: 80
+        batch_size: 160
         neg_top_k: 6
-        epoch_step: 20
+        epoch_steps: [[0, 5], [20, 20], [100, 50]]
     }
     num_workers: 12
     max_node_count: 800
@@ -19,13 +19,16 @@
     distance: l2
     loss: {
         name: ContrastiveLoss
-        pos_margin: 0.1
-        neg_margin: 12.0
-        total_node_count: 100000
+        pos_margin: 0.0
+        neg_margin: 1.0
+        total_node_count: 40000
         neg_mode: all_below_margin
     }
     optimizer: {
         name: SGD
         lr: 0.001
+    }
+    log_file: {
+        model_name: nn
     }
 }
