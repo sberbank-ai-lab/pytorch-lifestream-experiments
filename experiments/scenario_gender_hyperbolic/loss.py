@@ -40,6 +40,15 @@ def get_distance(conf):
         b = l2_to_sphere(b)
         return pairwise_l2_distance(a, b)
 
+    def pairwise_dotcos_distance(a, b):
+        a_n = (a.pow(2).sum(dim=1, keepdim=True) + 1e-9).pow(0.5)
+        b_n = (b.pow(2).sum(dim=1, keepdim=True) + 1e-9).pow(0.5)
+
+        return 1 - (a * b / a_n / b_n).sum(dim=1)
+
+    def pairwise_acos_distance(a, b):
+        return torch.acos((1 - pairwise_dotcos_distance(a, b)) * (1 - 1e-9))
+
     distance = conf['distance']
     if distance == 'l2':
         return pairwise_l2_distance
@@ -49,6 +58,10 @@ def get_distance(conf):
         return pairwise_hyperbola_distance
     elif distance == 'sphere':
         return pairwise_sphere_distance
+    elif distance == 'dotcos':
+        return pairwise_dotcos_distance
+    elif distance == 'acos':
+        return pairwise_acos_distance
     else:
         raise AttributeError(f'Unknown distance: {distance}')
 

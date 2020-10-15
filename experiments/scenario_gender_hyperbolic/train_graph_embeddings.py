@@ -62,22 +62,26 @@ class NNEmbeddigs(torch.nn.Module):
         self.embedding_dim = conf['embedding_dim']
 
         self.norm_embedding_weights = conf['norm_embedding_weights']
-        distance = conf['distance']
+        self.distance = conf['distance']
 
         self.model = torch.nn.Embedding(node_count, self.embedding_dim)
+
+    def weight_correction(self):
         if self.norm_embedding_weights:
             with torch.no_grad():
-                if distance == 'l2':
+                if self.distance == 'l2':
                     pass
-                elif distance == 'poincare':
-                    pass
-                elif distance == 'hyperbola':
-                    pass
-                elif distance == 'sphere':
+                elif self.distance == 'poincare':
+                    _norm = (2 * self.embedding_dim) ** 0.5
+                    self.model.weight.data = self.model.weight.data / _norm
+                elif self.distance == 'hyperbola':
+                    _norm = (2 * self.embedding_dim) ** 0.5
+                    self.model.weight.data = self.model.weight.data / _norm
+                elif self.distance == 'sphere':
                     _norm = (self.model.weight.data.pow(2).sum(dim=1, keepdim=True) + 1e-6).pow(0.5)
                     self.model.weight.data = self.model.weight.data / _norm
                 else:
-                    raise AttributeError(f'Unknown distance: {distance}')
+                    raise AttributeError(f'Unknown distance: {self.distance}')
 
     @property
     def num_embeddings(self):
@@ -233,6 +237,8 @@ def train_embeddings(conf, nn_embedding, s_edges):
 
     data_loader = create_train_dataloader(
         node_count, s_edges, batch_size, tree_batching_level, max_node_count, num_workers)
+
+    nn_embedding.weight_correction()
 
     validate(conf, nn_embedding, s_edges)
     for epoch in range(1, conf['epoch_n'] + 1):

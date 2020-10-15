@@ -25,6 +25,24 @@ PYTHONPATH="../../" python train_graph_embeddings.py \
     valid.epoch_step=50 \
     --conf conf/conf.hocon
 
+export SC_SUFFIX="base_256_mf"
+mkdir "models/${SC_SUFFIX}/"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}/" \
+    embedding_dim=256 loss.neg_margin=22.6 \
+    valid.epoch_step=50 \
+    --conf conf/conf.hocon
+
+export SC_SUFFIX="base_256_mf_lr"
+mkdir "models/${SC_SUFFIX}/"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}/" \
+    embedding_dim=256 loss.neg_margin=22.6 optimizer.lr=0.0014 \
+    valid.epoch_step=50 \
+    --conf conf/conf.hocon
+
 
 export SC_SUFFIX="base_128_mf"
 mkdir "models/${SC_SUFFIX}/"
@@ -62,6 +80,15 @@ PYTHONPATH="../../" python train_graph_embeddings.py \
     valid.epoch_step=50 \
     --conf conf/conf.hocon
 
+export SC_SUFFIX="base_032_sigma"
+mkdir "models/${SC_SUFFIX}/"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}/" \
+    embedding_dim=32 loss.neg_margin=2.8 \
+    valid.epoch_step=50 \
+    --conf conf/conf.hocon
+
 
 export SC_SUFFIX="poincare"
 mkdir "models/${SC_SUFFIX}/"
@@ -70,6 +97,18 @@ PYTHONPATH="../../" python train_graph_embeddings.py \
     model_prefix="models/${SC_SUFFIX}/" \
     valid.epoch_step=20 \
     distance="poincare" loss.neg_margin=6.0 valid.batch_size=40 \
+    --conf conf/conf.hocon
+
+
+export SC_SUFFIX="poincare_wnorm"
+mkdir "models/${SC_SUFFIX}/"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}/" \
+    valid.epoch_step=10 \
+    norm_embedding_weights=true \
+    optimizer.lr=0.001 \
+    distance="poincare" loss.neg_margin=1.0 valid.batch_size=40 \
     --conf conf/conf.hocon
 
 
@@ -84,7 +123,7 @@ PYTHONPATH="../../" python train_graph_embeddings.py \
     optimizer.lr=0.01 \
     --conf conf/conf.hocon
 
-export SC_SUFFIX="sphere_normw"
+export SC_SUFFIX="sphere_normw_2"
 mkdir "models/${SC_SUFFIX}/"
 PYTHONPATH="../../" python train_graph_embeddings.py \
     device=${SC_DEVICE} \
@@ -116,16 +155,35 @@ PYTHONPATH="../../" python train_graph_embeddings.py \
     optimizer.lr=0.02 \
     --conf conf/conf.hocon
 
+export SC_SUFFIX="dotcos"
+mkdir "models/${SC_SUFFIX}/"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}/" \
+    valid.epoch_step=20 \
+    distance="dotcos" loss.neg_margin=0.9 valid.batch_size=40 \
+    optimizer.lr=0.01 \
+    --conf conf/conf.hocon
 
+export SC_SUFFIX="acos"
+mkdir "models/${SC_SUFFIX}/"
+PYTHONPATH="../../" python train_graph_embeddings.py \
+    device=${SC_DEVICE} \
+    model_prefix="models/${SC_SUFFIX}/" \
+    valid.epoch_step=20 \
+    distance="acos" loss.neg_margin=0.6 valid.batch_size=40 \
+    optimizer.lr=0.01 \
+    --conf conf/conf.hocon
 
 
 ####################################################
 ####### Get embeddings and validate
 
 #
-for SC_SUFFIX in "sphere_normw" "base_064" "base_032"
+for SC_SUFFIX in "poincare_wnorm"
 do
-  for SC_EPOCH in 0001 0005 0010 0020 0040 0080 0100 0120 0200 0300 0400 0500 0600 0700 0800 0900 1000 1100 1200 1300 1400 1500 1600
+  # for SC_EPOCH in 0001 0005 0010 0020 0040 0080 0100 0120 0200 0300 0400 0500 0600 0700 0800 0900 1000 1100 1200 1300 1400 1500 1600
+  for SC_EPOCH in 0100
   do
       PYTHONPATH="../../" python inference.py \
           node_encoder="models/${SC_SUFFIX}/node_encoder.p" \
