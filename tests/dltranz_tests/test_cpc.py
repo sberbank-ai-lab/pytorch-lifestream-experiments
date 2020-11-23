@@ -1,7 +1,7 @@
 import torch
 from dltranz.seq_encoder import RnnEncoder
 from dltranz.trx_encoder import TrxEncoder
-from dltranz.baselines.cpc import CPC_Ecoder, run_experiment
+from dltranz.baselines.cpc import CPC_Padded_Encoder, run_experiment
 from tests.dltranz_tests.test_trx_encoder import gen_trx_data
 from dltranz.data_load import TrxDataset
 from dltranz.data_load import create_train_loader, create_validation_loader
@@ -58,7 +58,7 @@ def test_rnn_model():
 
     trx_e = TrxEncoder(config['trx_encoder'])
     rnn_e = RnnEncoder(TrxEncoder.output_size(config['trx_encoder']), config['rnn'])
-    cpc_e = CPC_Ecoder(trx_e, rnn_e, 6, config['cpc'])
+    cpc_e = CPC_Padded_Encoder(trx_e, rnn_e, 6, config['cpc'])
 
     train_data = gen_trx_data((torch.rand(1000)*60+1).long())
     train_ds = TrxDataset(train_data)

@@ -65,11 +65,19 @@ def shuffle_client_list_reproducible(conf, data):
     return data
 
 
+def fill_target(seq):
+    for rec in seq:
+        rec['target'] = -1
+        yield rec
+
+
 def prepare_data(conf):
     data = read_data_gen(conf['dataset.train_path'])
     data = tqdm(data)
     if 'max_rows' in conf['dataset']:
         data = islice(data, conf['dataset.max_rows'])
+
+    data = fill_target(data)
     data = prepare_embeddings(data, conf, is_train=True)
     data = shuffle_client_list_reproducible(conf, data)
     data = list(data)
@@ -101,7 +109,7 @@ def create_data_loaders(conf):
     train_dataset = DropoutTrxDataset(train_dataset, trx_dropout=conf['params.train.trx_dropout'],
                                       seq_len=conf['params.train.max_seq_len'])
 
-    if conf['params.train'].get('all_time_shuffle',False):
+    if conf['params.train'].get('all_time_shuffle', False):
         train_dataset = AllTimeShuffleMLDataset(train_dataset)
         logger.info('AllTimeShuffle used')
 

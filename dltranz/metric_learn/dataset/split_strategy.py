@@ -120,6 +120,17 @@ class SampleSlices(AbsSplit):
         return [date_range[s:s + l] for s, l in zip(start_pos[ix_sort], lengths[ix_sort])]
 
 
+class CutByDays(AbsSplit):
+    def __init__(self, first_date, last_date):
+        self.days_arange = np.arange(first_date, last_date+1)
+
+    def split(self, dates):
+        all_indexes = np.arange(len(dates))
+        left_indexes = np.searchsorted(dates.astype(np.int32), self.days_arange)
+        indexes = [all_indexes[:x] for x in left_indexes]
+        return indexes
+
+
 class SampleUniform(AbsSplit):
     """
     Sub samples with equal length = `seq_len`

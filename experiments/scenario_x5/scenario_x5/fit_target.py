@@ -32,13 +32,13 @@ def prepare_target_gender(data):
     }
 
     for rec in data:
-        rec['target'] = mapping.get(rec['target_gender'])
+        rec['target'] = mapping.get(rec['target'][0])
         yield rec
 
 
 def prepare_target_age(data):
     for rec in data:
-        age = int(rec['target_age'])
+        age = int(rec['target'][0])
         if age < 10 or age > 90:
             rec['target'] = None
         elif age < 35:
@@ -180,7 +180,7 @@ def main(_):
     results = []
 
     skf = StratifiedKFold(conf['cv_n_split'])
-    nrows = conf['params'].get('labeled_amount',-1) # semi-supervised setup. default = supervised
+    nrows = conf['params'].get('labeled_amount', -1)  # semi-supervised setup. default = supervised
 
     target_values = [rec['target'] for rec in train_data]
     for i, (i_train, i_valid) in enumerate(skf.split(train_data, target_values)):

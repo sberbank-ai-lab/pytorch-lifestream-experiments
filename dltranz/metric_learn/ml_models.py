@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.autograd import Function
 
 from dltranz.agg_feature_model import AggFeatureModel
-from dltranz.baselines.cpc import CPC_Ecoder
+from dltranz.baselines.cpc import CPC_Padded_Encoder
 from dltranz.transf_seq_encoder import TransformerSeqEncoder
 from dltranz.seq_encoder import RnnEncoder, LastStepEncoder, PerTransTransf, FirstStepEncoder, PaddedBatch
 from dltranz.custom_layers import DropoutEncoder
@@ -118,7 +118,7 @@ def cpc_model(params):
     trx_e = TrxEncoder(params['trx_encoder'])
     trx_e_out_size = TrxEncoder.output_size(params['trx_encoder'])
     rnn_e = RnnEncoder(trx_e_out_size, params['rnn'])
-    cpc_e = CPC_Ecoder(trx_e, rnn_e, trx_e_out_size, params['cpc'])
+    cpc_e = CPC_Padded_Encoder(trx_e, rnn_e, trx_e_out_size, params['cpc'])
     return cpc_e
 
 
@@ -189,7 +189,7 @@ def load_encoder_for_inference(conf):
         model_d = torch.load(conf['model_path.model'], map_location=torch.device("cpu"))
         model.load_state_dict(model_d)
 
-        if isinstance(model, CPC_Ecoder):
+        if isinstance(model, CPC_Padded_Encoder):
             trx_e, rnn_e = model.trx_encoder, model.seq_encoder
             l = LastStepEncoder()
             model = torch.nn.Sequential(trx_e, rnn_e, l)

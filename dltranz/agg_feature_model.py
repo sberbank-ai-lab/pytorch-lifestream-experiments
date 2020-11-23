@@ -23,6 +23,8 @@ class AggFeatureModel(torch.nn.Module):
             self.ohe_buffer[col_embed] = ohe
             self.register_buffer(f'ohe_{col_embed}', ohe)
 
+        self.agg_cat_features = config.get('agg_cat_features', {'count': True, 'sum': True, 'std': True})
+
     def forward(self, x: PaddedBatch):
         """
         {
@@ -78,16 +80,19 @@ class AggFeatureModel(torch.nn.Module):
                 # counts over val_embed
                 mask = (1.0 - ohe[0]).unsqueeze(0)  # 0, 1, 1, 1, ..., 1
                 e_cnt = ohe_transform.sum(dim=1) * mask
-                processed.append(e_cnt)
+                if self.agg_cat_features.get('count', False):
+                    processed.append(e_cnt)
 
                 # sum over val_embed
-                e_sum = m_sum.sum(dim=1)
-                e_mean = e_sum.div(e_cnt + 1e-9)
-                processed.append(e_mean)
+                if self.agg_cat_features.get('sum', False):
+                    e_sum = m_sum.sum(dim=1)
+                    e_mean = e_sum.div(e_cnt + 1e-9)
+                    processed.append(e_mean)
 
-                a = torch.clamp(m_sum.pow(2).sum(dim=1) - m_sum.sum(dim=1).pow(2).div(e_cnt + 1e-9), min=0.0)
-                e_std = a.div(torch.clamp(e_cnt - 1, min=0) + 1e-9).pow(0.5)
-                processed.append(e_std)
+                if self.agg_cat_features.get('std', False):
+                    a = torch.clamp(m_sum.pow(2).sum(dim=1) - m_sum.sum(dim=1).pow(2).div(e_cnt + 1e-9), min=0.0)
+                    e_std = a.div(torch.clamp(e_cnt - 1, min=0) + 1e-9).pow(0.5)
+                    processed.append(e_std)
 
         # n_unique
         for col_embed, options_embed in self.embeddings.items():
@@ -116,4 +121,5 @@ class AggFeatureModel(torch.nn.Module):
 
         e_sizes = [options_embed['in'] for col_embed, options_embed in embeddings.items()]
 
-        return 1 + len(numeric_values) * (3 + 3 * sum(e_sizes)) + len(embeddings)
+        n_features = sum(config.get('agg_cat_features', {'count': True, 'mean': True, 'std': True}).values())
+        return 1 + len(numeric_values) * (3 + n_features * sum(e_sizes)) + len(embeddings)
