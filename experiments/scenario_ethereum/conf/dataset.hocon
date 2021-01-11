@@ -1,0 +1,17 @@
+{
+  dataset: {
+    train_path: "/mnt/molchanov/etherium_parced_edges1000_txntresh30_graphs_overlap/dataset_split/split_clients_metric_learning_dataset.parquet"
+    _train_path: "/mnt/molchanov/etherium_parced_edges1000_txntresh30_graphs_overlap/dataset_merge/merge_clients_metric_learning_dataset.parquet"
+    valid_size: 0.05
+    client_list_shuffle_seed: 0
+
+    preprocessing: {
+        add_seq_len: true
+    }
+
+    min_seq_len: 20
+  }
+  cv_n_split: 5
+
+  log_ds_stat: false
+}

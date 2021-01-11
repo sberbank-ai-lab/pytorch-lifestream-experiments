@@ -1,0 +1,88 @@
+{
+  "params": {
+    "experiment": {
+      "name": "default"
+    },
+    "device": "cuda",
+    "model_type": "rnn",
+    "rnn": {
+      "type": "gru",
+      "hidden_size": 512,
+      "bidir": false,
+      "trainable_starter": "static"
+    },
+    "trx_encoder": {
+      "norm_embeddings": false,
+      "embeddings_noise": 0.003,
+      "embeddings": {
+        "dt_event_weekday": {"in": 6, "out": 2},
+        "dt_event_hour": {"in": 24, "out": 2}
+      },
+      "numeric_values": {
+        "value": "identity",
+        "gas": "identity",
+        "gas_price": "identity"
+      }
+    },
+    "use_normalization_layer": true,
+    "lr_scheduler": {
+      "step_size": 1,
+      "step_gamma": 0.9025
+    },
+    "train": {
+      "num_workers": 8,
+      "batch_size": 1024,
+      "split_strategy": {
+        "split_strategy": "SampleSlices",
+        "split_count": 5,
+        "cnt_min": 15,
+        "cnt_max": 75
+      },
+      "sampling_strategy": "HardNegativePair",
+      "trx_dropout": 0.4,
+      "max_seq_len": 100,
+      "neg_count": 5,
+      "loss": "ContrastiveLoss",
+      "margin": 0.5,
+      "lr": 0.002,
+      "weight_decay": 0.0,
+      "n_epoch": 100,
+      "_checkpoints": {
+        "save_interval": 15,
+        "n_saved": 1000,
+        "dirname": "models/mles_checkpoints/",
+        "filename_prefix": "ethereum_mles",
+        "create_dir": true
+      }
+    },
+    "norm_scores": false,
+    "valid": {
+      "batch_size": 1024,
+      "num_workers": 16,
+      "split_strategy": {
+        "split_strategy": "SampleSlices",
+        "split_count": 5,
+        "cnt_min": 25,
+        "cnt_max": 100
+      },
+      "max_seq_len": 100
+    }
+  },
+
+  "save_model": true,
+  "model_path": {
+    "model": "models/ethereum_mles_model.p",
+    "only_encoder": false
+  },
+
+  "output": {
+    "path": "data/ethereum_mles_embeddings",
+    "format": "parquet",
+    "columns": ["node_id", "graph_id"]
+  },
+
+  "stats": {
+    "path": "runs/ethereum_mles_result.json"
+  }
+
+}
