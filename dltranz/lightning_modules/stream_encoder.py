@@ -260,6 +260,209 @@ class StreamEncoder(pl.LightningModule):
             loss += torch.relu(v - bound_h).mean()
         return loss
 
+
+class TransformerStreamEncoder(pl.LightningModule):
+    def __init__(self, encoder_x2z,
+                 history_size, predict_range, predict_w,
+                 z_channels, n_head, dim_feedforward, num_layers, is_norm,
+                 lr, weight_decay, step_size, gamma,
+                 cpc_w, cpc_neg_w, cov_z_w, var_z_w,
+                 var_gamma_z=(0.3, None), neg_count=8,
+                 ):
+        super().__init__()
+
+        self.save_hyperparameters()  # ignore='encoder_x2z'
+
+        self.encoder_x2z = encoder_x2z
+
+        self.transformer_encoder = torch.nn.TransformerEncoder(
+            torch.nn.TransformerEncoderLayer(
+                d_model=z_channels,
+                nhead=n_head,
+                dim_feedforward=dim_feedforward,
+            ),
+            num_layers=num_layers,
+            norm=None if is_norm else torch.nn.LayerNorm(),
+        )
+
+        self.pos_embeddings = torch.nn.Parameter(torch.randn(history_size + max(predict_range) + 1, 1, z_channels))
+
+        self.reg_bn_z = torch.nn.BatchNorm1d(z_channels, affine=False)
+        self.reg_bn_c = torch.nn.BatchNorm1d(z_channels, affine=False)
+
+    def configure_optimizers(self):
+        optimisers = [torch.optim.RMSprop(self.parameters(),
+                                       lr=self.hparams.lr,
+                                       weight_decay=self.hparams.weight_decay,
+                                       )]
+        schedulers = [torch.optim.lr_scheduler.StepLR(o,
+                                                      step_size=self.hparams.step_size,
+                                                      gamma=self.hparams.gamma) for o in optimisers]
+        return optimisers, schedulers
+
+    def forward(self, x):
+        z = self.encoder_x2z(x)
+        z = z.transpose(0, 1)  # S, N, E == T, B, H
+        predict_len = max(self.hparams.predict_range) + 1
+        z = torch.cat([z, torch.zeros(predict_len, z.size(1), z.size(2))], dim=0)
+        z = z + self.pos_embeddings
+        p = self.transformer_encoder(z)
+        p = p[-predict_len:]
+        p = p.transpose(0, 1)  # B, T, H
+        return z, p
+
+    def training_step(self, batch, batch_idx):
+        x = batch[0]
+        z = self.encoder_x2z(x)
+        zx, zy = z[:, :self.hparams.history_size], z[:, self.hparams.history_size:]
+
+        cpc_loss, cpc_neg_loss = self.cpc_loss(zx, zy)
+        cov_z_loss = self.cov_z_loss(zx)
+        var_z_loss = self.var_z_loss(zx)
+        loss = 0.0
+
+        for loss_w, loss_part in zip(
+            [self.hparams.cpc_w, self.hparams.cpc_neg_w,
+             self.hparams.cov_z_w, self.hparams.var_z_w],
+            [cpc_loss, cpc_neg_loss,
+             cov_z_loss, var_z_loss],
+        ):
+            if loss_w > 0:
+                loss += loss_w * loss_part
+
+        self.log('loss/cpc', cpc_loss, prog_bar=True)
+        self.log('loss/cpc_neg', cpc_neg_loss, prog_bar=False)
+        self.log('loss/z_cov', cov_z_loss, prog_bar=False)
+        self.log('loss/z_var', var_z_loss, prog_bar=False)
+        self.log('loss/loss', loss)
+
+        return loss
+
+    def on_train_start(self):
+        self.logger.log_hyperparams(self.hparams, {
+            'hp/z_std': 0,
+            'hp/cpc_dtr': 0,
+            'hp/cpc_dtt': 0,
+            'hp/cpc_d_lift': 0,
+            'hp/cpc_r2': 0,
+            'hp/cpc_pow': 0,
+            'hp/z_self_corr': 0,
+            'hp/z_unique_features': 0,
+            'hp/c_self_corr': 0,
+            'hp/c_unique_features': 0,
+        })
+
+    def validation_step(self, batch, batch_idx):
+        x = batch[0]
+        B, T, C = x.size()
+        history_size = self.hparams.history_size
+        predict_len = max(self.hparams.predict_range) + 1
+
+        ix_x_t = torch.arange(history_size).view(1, -1) + \
+                 torch.arange(T - history_size + 1 - predict_len).view(-1, 1)
+        ix_x_t = ix_x_t.unsqueeze(0).repeat(B, 1, 1)
+        L = ix_x_t.size(1)
+        ix_x_b = torch.arange(B).view(-1, 1, 1).repeat(1, L, history_size)
+        ix_y_t = history_size + torch.arange(predict_len).view(1, -1) + \
+                 torch.arange(T - history_size + 1 - predict_len).view(-1, 1)
+        ix_y_t = ix_y_t.unsqueeze(0).repeat(B, 1, 1)
+        ix_y_b = torch.arange(B).view(-1, 1, 1).repeat(1, L, predict_len)
+
+        x_long = x[ix_x_b, ix_x_t].view(B * L, T, C)
+        z_long, p_long = self.forward(x_long)
+        z_long = z_long.view(B, L, T, C)  # B, L, Tx, C
+        p_long = p_long.view(B, L, T, C)  # B, L, Ty, C
+        y_long = x[ix_y_b, ix_y_t]  # B, L, Ty, C
+
+        z_std = z.std(dim=1).mean()
+
+        history_size = self.hparams.history_size
+        r2_score = 0
+        for i, w in zip(self.hparams.predict_range, self.hparams.predict_wp):
+            t = z[:, history_size + i:z.size(1) + (i + 1), :]
+
+            p = l(c[:, history_size - 1 : z.size(1) - (i + 1), :])
+
+            r2_s = torch.where(
+                t.std(dim=1) > 1e-3,
+                1 - (p - t).pow(2).mean(dim=1) / t.var(dim=1),
+                torch.tensor([0.0], device=z.device),
+            )
+            self.log(f'r2/horizon_{i:03d}', r2_s.mean())
+            r2_score += r2_s.mean() * w
+        cpc_r2 = r2_score
+
+        self.log('hp/z_std', z_std)
+        self.log('hp/cpc_r2', cpc_r2, prog_bar=True)
+
+        z = (z - z.mean(dim=1, keepdim=True)) / (z.std(dim=1, keepdim=True) + 1e-6)
+        c = (c - c.mean(dim=1, keepdim=True)) / (c.std(dim=1, keepdim=True) + 1e-6)
+
+        mz = (torch.bmm(z.transpose(1, 2), z) / z.size(1)).abs()  # B, z, z
+        Cz = mz.size(1)
+        off_diag_ix = (1 - torch.eye(Cz, device=z.device)).bool().view(-1)
+        m = mz.view(-1, Cz * Cz)[:, off_diag_ix]
+        self.log('hp/z_self_corr', 0.0 if Cz == 1 else m.mean())
+        self.log('hp/z_unique_features', 1 / (mz.mean() + 1e-3), prog_bar=True)
+        self.log('hp/cpc_pow', cpc_r2 / (mz.mean() + 1e-3))
+
+        mc = (torch.bmm(c.transpose(1, 2), c) / c.size(1)).abs()  # B, z, z
+        Cc = mc.size(1)
+        off_diag_ix = (1 - torch.eye(Cc, device=z.device)).bool().view(-1)
+        m = mc.view(-1, Cc * Cc)[:, off_diag_ix]
+        self.log('hp/c_self_corr', 0.0 if Cz == 1 else m.mean())
+        self.log('hp/c_unique_features', 1 / (mc.mean() + 1e-3))
+
+    def cpc_loss(self, x, y):
+        x = x.transpose(0, 1)  # S, N, E == T, B, H
+        predict_len = y.size(1)
+        z = torch.cat([x, torch.zeros(predict_len, x.size(1), x.size(2))], dim=0)
+        z = z + self.pos_embeddings
+        p = self.transformer_encoder(z)
+        p = p[-predict_len:]
+        p = p.transpose(0, 1)  # B, T, H
+
+        loss = 0.0
+        neg_loss = 0.0
+        for i, w in zip(self.hparams.predict_range, self.hparams.predict_w):
+            predict = p[:, i]
+            target = y[:, i]
+            neg_samples = torch.cat([predict.unsqueeze(1), self.sample_cpc_neg(y)], dim=1)  # B, n+1, H
+            neg_dist = ((neg_samples - target.unsqueeze(1)).pow(2).sum(dim=2) + 1e-12).pow(0.5)
+            neg_dist = -1 * torch.log_softmax(-1 * neg_dist, dim=1)[:, 0]
+            neg_loss += neg_dist.mean() * w
+            loss += (predict - target).pow(2).sum(dim=1).mean() * w
+
+        return loss, neg_loss
+
+    def sample_cpc_neg(self, y):
+        B, T, H = y.size()
+        batch_ix = torch.multinomial(1 - torch.eye(B, device=y.device),
+                                     num_samples=self.hparams.neg_count,
+                                     replacement=True)  # B, n
+        time_ix = torch.randint(0, T, batch_ix.size())
+        return y[batch_ix, time_ix]
+
+    def cov_z_loss(self, x):
+        B, T, C = x.size()
+        if C == 1:
+            return torch.zeros(1, dtype=x.dtype, device=x.device).mean()
+        x = self.reg_bn_z(x.reshape(B * T, C)).reshape(B, T, C)
+        m = torch.bmm(x.transpose(1, 2), x) / T  # B, C, C
+        off_diag_ix = (1 - torch.eye(C, device=x.device)).bool().view(-1)
+        loss = m.view(B, C * C)[:, off_diag_ix].pow(2).mean()
+        return loss
+
+    def var_z_loss(self, x):
+        B, T, C = x.size()
+        v = (torch.var(x, dim=1) + 1e-6).pow(0.5)
+        bound_l, bound_h = self.hparams.var_gamma_z
+        loss = torch.relu(bound_l - v).mean()
+        if bound_h is not None:
+            loss += torch.relu(v - bound_h).mean()
+        return loss
+
+
 class Dataset3DTensor(torch.utils.data.Dataset):
     def __init__(self, data, sample_len):
         super().__init__()
